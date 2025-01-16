@@ -86,13 +86,13 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
                 local_region = city["LocalRegion"],
                 capital_city = city["CapitalCity"],
                 population = city["BaseYearPopulation"],
-                income_pc = city["BaseYearIncome"],
+                income_USDpercap = city["BaseYearIncome"],
                 latitude = lat_sum / capacity_sum,
                 longitude = city_longitude,
-                domestic_fees_perpax = dom_fee_pax_sum / capacity_sum,
-                domestic_fees_permvmt = list(map(lambda x: x/capacity_sum, dom_fee_mov_sum)),
-                international_fees_perpax = intnl_fee_pax_sum / capacity_sum,
-                international_fees_permvmt = list(map(lambda x: x/capacity_sum, intnl_fee_mov_sum)),
+                domestic_fees_USDperpax = dom_fee_pax_sum / capacity_sum,
+                domestic_fees_USDpermvmt = list(map(lambda x: x/capacity_sum, dom_fee_mov_sum)),
+                international_fees_USDperpax = intnl_fee_pax_sum / capacity_sum,
+                international_fees_USDpermvmt = list(map(lambda x: x/capacity_sum, intnl_fee_mov_sum)),
                 taxi_out_mins = taxi_out_sum / capacity_sum,
                 taxi_in_mins = taxi_in_sum / capacity_sum,
                 capacity_perhr = capacity_sum,
@@ -142,3 +142,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
