@@ -20,7 +20,7 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
     # check number of different aircraft supported by airport_data
     n_aircraft = 0
     while (f"LandingCosts_PerMovt_Size{n_aircraft}_Domestic_2015USdollars" in airport_data.columns):
-        n_aircraft = n_aircraft + 1
+        n_aircraft += 1
 
     cities = []
     # loop over rows of city_data
@@ -43,39 +43,39 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
             if not (airport_id == 0):
                 airport_row = airport_data.index[airport_data["AirportID"] == airport_id].tolist()[0]
 
-                capacity_sum = capacity_sum + float(airport_data.at[airport_row, "Capacity_movts_hr"])
+                capacity_sum += float(airport_data.at[airport_row, "Capacity_movts_hr"])
 
-                lat_sum = lat_sum + (float(airport_data.at[airport_row, "Latitude"]) * float(airport_data.at[airport_row, "Capacity_movts_hr"]))
+                lat_sum += (float(airport_data.at[airport_row, "Latitude"]) * float(airport_data.at[airport_row, "Capacity_movts_hr"]))
 
                 # check for edge case where a city has airports either side of the 180deg longitude line
                 longitude = float(airport_data.at[airport_row, "Longitude"])
                 if longitude * long_sum < 0.0:
                     if longitude < 0.0:
-                        longitude = longitude + 360.0
+                        longitude += 360.0
                     else:
-                        longitude = longitude - 360.0
+                        longitude -= 360.0
                     long_flag = True
-                long_sum = long_sum + (longitude * float(airport_data.at[airport_row, "Capacity_movts_hr"]))
+                long_sum += (longitude * float(airport_data.at[airport_row, "Capacity_movts_hr"]))
 
-                dom_fee_pax_sum = dom_fee_pax_sum + float(airport_data.at[airport_row, "LandingCosts_PerPax_Domestic_2015USdollars"])
+                dom_fee_pax_sum += float(airport_data.at[airport_row, "LandingCosts_PerPax_Domestic_2015USdollars"])
                 dom_fee_mov_sum = list(map(add, dom_fee_mov_sum, [float(airport_data.at[airport_row, f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"]) for ac in range(n_aircraft)]))
 
-                intnl_fee_pax_sum = intnl_fee_pax_sum + float(airport_data.at[airport_row, "LandingCosts_PerPax_International_2015USdollars"])
+                intnl_fee_pax_sum += float(airport_data.at[airport_row, "LandingCosts_PerPax_International_2015USdollars"])
                 intnl_fee_mov_sum = list(map(add, intnl_fee_mov_sum, [float(airport_data.at[airport_row, f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"]) for ac in range(n_aircraft)]))
 
-                taxi_out_sum = taxi_out_sum + float(airport_data.at[airport_row, "UnimpTaxiOut_min"])
-                taxi_in_sum = taxi_in_sum + float(airport_data.at[airport_row, "UnimpTaxiIn_min"])
+                taxi_out_sum += float(airport_data.at[airport_row, "UnimpTaxiOut_min"])
+                taxi_in_sum += float(airport_data.at[airport_row, "UnimpTaxiIn_min"])
             else:
                 # airport_id == 0 => there are no more airports for that city
                 break
-            airport_column = airport_column + 1
+            airport_column += 1
         
         city_longitude = long_sum / capacity_sum
         if long_flag:
             if city_longitude < -180.0:
-                city_longitude = city_longitude + 360.0
+                city_longitude += 360.0
             if city_longitude > 180.0:
-                city_longitude = city_longitude - 360.0
+                city_longitude -= 360.0
 
         cities.append(
             classes.City(
