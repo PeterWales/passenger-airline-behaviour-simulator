@@ -83,6 +83,6 @@ class Airline:
     """ Class for keeping track of airline data"""
     airline_id: int
     region: int
-    country: int
-    LCC: bool
+    country: str
+    country_num: int
     n_aircraft: list
