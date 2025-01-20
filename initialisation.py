@@ -151,15 +151,16 @@ def initialise_airlines(fleet_data: pd.DataFrame, country_data: pd.DataFrame, ru
 
         # assign aircraft to countries
         region_aircraft = fleet_data[f"Census{region}"].to_list()
+        unallocated = region_aircraft.copy()
         for country_idx, country in sorted_region:  # no need for iterrows due to sorting method
             country_aircraft = [0] * n_aircraft_types
             # iterate through aircraft types and account for rounding issues
             for i in range(n_aircraft_types):
                 allocated = int(round(region_aircraft[i] * country['Region_GDP_Proportion']))
-                if allocated == 0 and region_aircraft[i] > 0:
+                if allocated == 0 and unallocated[i] > 0:
                     allocated = 1
-                country_aircraft[i] = min(allocated, region_aircraft[i])
-                region_aircraft[i] -= country_aircraft[i]
+                country_aircraft[i] = min(allocated, unallocated[i])
+                unallocated[i] -= country_aircraft[i]
 
             # assign aircraft to airlines within country
             for country_airline_idx in range(run_parameters["AirlinesPerCountry"]):
