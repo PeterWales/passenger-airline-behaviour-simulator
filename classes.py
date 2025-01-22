@@ -35,6 +35,7 @@ class City:
     capacity_perhr : float
         Maximum aircraft movements (takeoffs and landings) in any one hour
     """
+
     city_id: int
     city_name: str
     region: int
@@ -57,6 +58,7 @@ class City:
 @dataclass
 class Aircraft:
     """Class for keeping track of aircraft data"""
+
     aircraft_id: int
     seats: int
     lease_USDpermonth: float
@@ -81,7 +83,8 @@ class Aircraft:
 
 @dataclass
 class Airline:
-    """ Class for keeping track of airline data"""
+    """Class for keeping track of airline data"""
+
     airline_id: int
     region: int
     country: str
@@ -108,14 +111,22 @@ class Route:
         Passengers per year
     base_fare : float
         Fare in USD per passenger
-    
+
     Methods
     -------
     calc_route(origin: City, destination: City) -> tuple[float, list]
         Calculate the great circle route between the origin and destination cities
         Returns the distance in meters and a list of waypoints
     """
-    def __init__(self, route_id: int, origin : City, destination : City, base_demand: int, base_fare: float):
+
+    def __init__(
+        self,
+        route_id: int,
+        origin: City,
+        destination: City,
+        base_demand: int,
+        base_fare: float,
+    ):
         self.route_id = route_id
         self.distance, self.waypoints = Route.calc_route(origin, destination)
         self.origin = origin
@@ -124,7 +135,7 @@ class Route:
         self.base_fare = base_fare
 
     @staticmethod
-    def calc_route(origin : City, destination : City) -> tuple[float, list]:
+    def calc_route(origin: City, destination: City) -> tuple[float, list]:
         """
         Use Haversine formula to calculate the great circle distance and route between the origin and destination cities
         """
@@ -137,7 +148,12 @@ class Route:
         r = 6378000.0  # mean radius of the earth in meters
         distance = 0.0
         for wpt_num in range(len(waypoints) - 1):
-            term1 = 1.0 - np.cos(np.deg2rad(waypoints[wpt_num+1]["latitude"] - waypoints[wpt_num]["latitude"]))
+            term1 = 1.0 - np.cos(
+                np.deg2rad(
+                    waypoints[wpt_num+1]["latitude"]
+                    - waypoints[wpt_num]["latitude"]
+                )
+            )
             term2 = (
                 np.cos(np.deg2rad(waypoints[wpt_num]["latitude"]))
                 * np.cos(np.deg2rad(waypoints[wpt_num+1]["latitude"]))
