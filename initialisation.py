@@ -6,6 +6,8 @@ import classes
 def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> list:
     """
     Generate list of instances of City dataclass from contents of CityData and AirportData files
+    List is indexed to match CityID field in CityData file
+    If a certain index doesn't exist as a CityID in CityData, the corresponding list element is None
 
     Parameters
     ----------
@@ -21,9 +23,20 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
     while (f"LandingCosts_PerMovt_Size{n_aircraft}_Domestic_2015USdollars" in airport_data.columns):
         n_aircraft += 1
 
-    cities = []
+    # find CityID of last city in city_data
+    last_city_id = city_data["CityID"].iloc[-1]
+    cities = [None] * (last_city_id + 1)
+
     # loop over rows of city_data
-    for idx, city in city_data.iterrows():
+    # for idx, city in city_data.iterrows():
+    for city_id in range(last_city_id + 1):
+        # check whether city_id is a CityID in city_data
+        if not (city_id in city_data["CityID"].values):
+            continue  # leave cities[city_id] as None
+
+        city = city_data.loc[city_data["CityID"] == city_id]
+        city = city.squeeze()  # convert from DataFrame to Series
+
         # calculate capacity-weighted mean of airport data
         capacity_sum = 0.0
         lat_sum = 0.0
@@ -76,9 +89,9 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
             if city_longitude > 180.0:
                 city_longitude -= 360.0
 
-        cities.append(
+        cities[city_id] = (
             classes.City(
-                city_id = city["CityID"],
+                city_id = city_id,
                 city_name = city["CityName"],
                 region = city["Region"],
                 country = city["Country"],
@@ -185,3 +198,41 @@ def initialise_airlines(fleet_data: pd.DataFrame, country_data: pd.DataFrame, ru
 
                     airline_idx += 1
     return airlines
+
+
+def initialise_routes(cities: list, city_pair_data: pd.DataFrame) -> list:
+    """
+    Generate 2D list of instances of Route dataclass from contents of DataByCityPair file
+
+    Parameters
+    ----------
+    cities : list of instances of City dataclass
+    city_pair_data : pd.DataFrame
+
+    Returns
+    -------
+    routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
+    """
+    n_cities = len(cities)
+    routes = [[None for _ in range(n_cities)] for _ in range(n_cities)]
+
+    route_id = 0
+
+    for idx, route in city_pair_data.iterrows():
+        origin_id = int(route["OriginCityID"])
+        destination_id = int(route["DestinationCityID"])
+
+        if origin_id == 0 or destination_id == 0 or origin_id == destination_id:
+            continue
+
+        routes[origin_id][destination_id] = (
+            classes.Route(
+                route_id = route_id,
+                origin = cities[origin_id],
+                destination = cities[destination_id],
+                base_demand = route["BaseYearODDemandPax_Est"],
+                base_fare = route["Fare_Est"]
+            )
+        )
+        route_id += 1
+    return routes
