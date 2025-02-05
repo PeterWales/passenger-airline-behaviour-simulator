@@ -247,7 +247,7 @@ def initialise_airlines(
 
 
 def initialise_routes(
-    cities: list, city_pair_data: pd.DataFrame, elasticities: pd.DataFrame
+    cities: list, city_pair_data: pd.DataFrame, price_elasticities: pd.DataFrame
 ) -> list:
     """
     Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
@@ -256,14 +256,14 @@ def initialise_routes(
     ----------
     cities : list of instances of City dataclass
     city_pair_data : pd.DataFrame
-    elasticities : pd.DataFrame
+    price_elasticities : pd.DataFrame
 
     Returns
     -------
     routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
     """
-    # order elasticities dataframe by OD_1 and OD_2
-    elasticities = elasticities.sort_values(by=["OD_1", "OD_2"])
+    # order price_elasticities dataframe by OD_1 and OD_2
+    price_elasticities = price_elasticities.sort_values(by=["OD_1", "OD_2"])
 
     n_cities = len(cities)
     routes = [[None for _ in range(n_cities)] for _ in range(n_cities)]
@@ -285,19 +285,22 @@ def initialise_routes(
             continue
 
         # find the elasticity values for the current route - note OD_1 <= OD_2
-        elasticities_series = elasticities.loc[
-            (elasticities["OD_1"] == min(cities[origin_id].region, cities[destination_id].region))
-            & (elasticities["OD_2"] == max(cities[origin_id].region, cities[destination_id].region))
+        price_elasticities_series = price_elasticities.loc[
+            (price_elasticities["OD_1"] == min(cities[origin_id].region, cities[destination_id].region))
+            & (price_elasticities["OD_2"] == max(cities[origin_id].region, cities[destination_id].region))
         ]
-        elasticities_series = elasticities_series.squeeze()  # convert from DataFrame to Series
+        price_elasticities_series = price_elasticities_series.squeeze()  # convert from DataFrame to Series
 
         routes[origin_id][destination_id] = classes.Route(
             route_id=route_id,
             origin=cities[origin_id],
             destination=cities[destination_id],
-            elasticities=elasticities_series,
+            price_elasticities=price_elasticities_series,
             base_demand=route["BaseYearODDemandPax_Est"],
             base_fare=route["Fare_Est"],
         )
+        routes[origin_id][destination_id].update_route()
+        routes[origin_id][destination_id].update_price_elasticity()
+        
         route_id += 1
     return routes

@@ -129,14 +129,14 @@ class Route:
         destination: City,
         base_demand: int,
         base_fare: float,
-        elasticities: pd.DataFrame,
+        price_elasticities: pd.Series,
     ):
         self.route_id = route_id
         self.origin = origin
         self.destination = destination
         self.base_demand = base_demand
         self.base_fare = base_fare
-        self.elasticities = elasticities
+        self.price_elasticities = price_elasticities
         self.distance = None
         self.waypoints = None
 
@@ -168,15 +168,13 @@ class Route:
             # Haversine Formula can result in numerical errors when origin and destination approach opposite sides of the earth
             self.distance += min(2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)), np.pi * r)
 
-    def update_elasticity(self) -> None:
+    def update_price_elasticity(self) -> None:
         """
         Determine whether the route is long or short haul and assign the appropriate elasticity values.
         """
-        if self.distance < 3000:  # arbitrary threshold for short haul
+        if self.distance < 3000 * 1609.344:  # arbitrary threshold for short/long haul (3000 miles)
             haul = "SH"
         else:
             haul = "LH"
-        self.elasticities = {
-            "route": self.elasticities[f"route_{haul}"],
-            "national": self.elasticities[f"national_{haul}"],
-        }
+        self.price_elasticities["route"] = self.price_elasticities[f"route_{haul}"]
+        self.price_elasticities["national"] = self.price_elasticities[f"national_{haul}"]

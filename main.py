@@ -33,7 +33,7 @@ def main():
             os.path.join(data_path, "FleetDataPassenger.csv")
         )  # note cargo aircraft are in a seperate file
         city_pair_data = pd.read_csv(os.path.join(data_path, "DataByCityPair.csv"))
-        elasticities = pd.read_csv(os.path.join(data_path, "Elasticities.csv"))
+        price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
 
         # create classes
         print("    Initialising cities...")
@@ -44,7 +44,7 @@ def main():
             fleet_data, country_data, run_parameters
         )
         print("    Initialising routes...")
-        routes = initialisation.initialise_routes(cities, city_pair_data, elasticities)
+        routes = initialisation.initialise_routes(cities, city_pair_data, price_elasticities)
 
         # simulate base year
 
