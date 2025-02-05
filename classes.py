@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import pandas as pd
 
 
 @dataclass
@@ -111,12 +112,14 @@ class Route:
         Passengers per year
     base_fare : float
         Fare in USD per passenger
+    price_elasticity : dict
+        Dictionary with keys "route" and "national"
 
     Methods
     -------
-    calc_route(origin: City, destination: City) -> tuple[float, list]
+    calc_route(origin: City, destination: City, elasticities: pd.Series) -> tuple[float, list, dict]
         Calculate the great circle route between the origin and destination cities
-        Returns the distance in meters and a list of waypoints
+        Returns the distance in meters, a list of waypoints and a dictionary of price elasticities
     """
 
     def __init__(
@@ -124,22 +127,31 @@ class Route:
         route_id: int,
         origin: City,
         destination: City,
+        elasticities: pd.DataFrame,
         base_demand: int,
         base_fare: float,
     ):
         self.route_id = route_id
-        self.distance, self.waypoints = Route.calc_route(origin, destination)
+        self.distance, self.waypoints, self.price_elasticity = Route.calc_route(
+            origin, destination, elasticities
+        )
         self.origin = origin
         self.destination = destination
         self.base_demand = base_demand
         self.base_fare = base_fare
 
     @staticmethod
-    def calc_route(origin: City, destination: City) -> tuple[float, list]:
+    def calc_route(
+        origin: City, destination: City, elasticities: pd.Series
+    ) -> tuple[float, list, dict]:
         """
-        Use Haversine formula to calculate the great circle distance and route between the origin and destination cities
+        Use Haversine formula to calculate the great circle distance and route between the origin and destination cities.
+        Determine whether the route is long or short haul and assign the appropriate elasticity values.
         """
         # TODO: generate waypoints between origin and destination to route around airspace restrictions
+
+        long_haul = 3000  # distance in miles
+
         waypoints = [
             {"latitude": origin.latitude, "longitude": origin.longitude},
             {"latitude": destination.latitude, "longitude": destination.longitude},
@@ -161,4 +173,14 @@ class Route:
             )
             # Haversine Formula can result in numerical errors when origin and destination approach opposite sides of the earth
             distance += min(2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)), np.pi * r)
-        return distance, waypoints
+
+        if distance < long_haul:
+            haul = "SH"
+        else:
+            haul = "LH"
+        elasticity = {
+            "route": elasticities[f"route_{haul}"],
+            "national": elasticities[f"national_{haul}"],
+        }
+
+        return distance, waypoints, elasticity

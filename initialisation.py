@@ -245,19 +245,25 @@ def initialise_airlines(
     return airlines
 
 
-def initialise_routes(cities: list, city_pair_data: pd.DataFrame) -> list:
+def initialise_routes(
+    cities: list, city_pair_data: pd.DataFrame, elasticities: pd.DataFrame
+) -> list:
     """
-    Generate 2D list of instances of Route dataclass from contents of DataByCityPair file
+    Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
 
     Parameters
     ----------
     cities : list of instances of City dataclass
     city_pair_data : pd.DataFrame
+    elasticities : pd.DataFrame
 
     Returns
     -------
     routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
     """
+    # order elasticities dataframe by OD_1 and OD_2
+    elasticities = elasticities.sort_values(by=["OD_1", "OD_2"])
+
     n_cities = len(cities)
     routes = [[None for _ in range(n_cities)] for _ in range(n_cities)]
 
@@ -270,10 +276,18 @@ def initialise_routes(cities: list, city_pair_data: pd.DataFrame) -> list:
         if origin_id == 0 or destination_id == 0 or origin_id == destination_id:
             continue
 
+        # find the elasticity values for the current route - note OD_1 <= OD_2
+        elasticities_series = elasticities.loc[
+            (elasticities["OD_1"] == min(cities[origin_id].region, cities[destination_id].region))
+            & (elasticities["OD_2"] == max(cities[origin_id].region, cities[destination_id].region))
+        ]
+        elasticities_series = elasticities_series.squeeze()  # convert from DataFrame to Series
+
         routes[origin_id][destination_id] = classes.Route(
             route_id=route_id,
             origin=cities[origin_id],
             destination=cities[destination_id],
+            elasticities=elasticities_series,
             base_demand=route["BaseYearODDemandPax_Est"],
             base_fare=route["Fare_Est"],
         )
