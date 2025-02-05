@@ -139,6 +139,8 @@ class Route:
         self.price_elasticities = price_elasticities
         self.distance = None
         self.waypoints = None
+        self.origin_income_elasticity = None
+        self.destination_income_elasticity = None
 
     def update_route(self) -> None:
         """
@@ -178,3 +180,84 @@ class Route:
             haul = "LH"
         self.price_elasticities["route"] = self.price_elasticities[f"route_{haul}"]
         self.price_elasticities["national"] = self.price_elasticities[f"national_{haul}"]
+
+    def update_income_elasticity(self, income_elasticities: pd.DataFrame) -> None:
+        """
+        Determine whether the route is short/medium/long/ultra long haul.
+        Determine whether the origin and destination are in the U.S., another developed country or a developing country.
+        Assign the appropriate income elasticity values.
+        """
+        # TODO: determine U.S. country code programmatically
+        # TODO: add a static function to avoid code duplication
+
+        if self.distance < 1000 * 1609.344:  # arbitrary threshold for short/medium haul (1000 miles)
+            haul = "SH"
+        elif self.distance < 3000 * 1609.344:  # arbitrary threshold for medium/long haul (3000 miles)
+            haul = "MH"
+        elif self.distance < 5000 * 1609.344:  # arbitrary threshold for long/ultra long haul (5000 miles)
+            haul = "LH"
+        else:
+            haul = "ULH"
+
+        # World Bank GNI thresholds for country income levels
+        lower_middle_income = 1166
+        upper_middle_income = 4526
+        high_income = 14005
+
+        # origin
+        if self.origin.country == 304:  # U.S. country code
+            self.origin_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
+            ]
+        elif self.origin.income_USDpercap < lower_middle_income:
+            self.origin_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+            ]
+        elif self.origin.income_USDpercap < high_income:
+            # linearly interpolate between developing and developed country elasticities
+            gradient = (
+                income_elasticities.loc[
+                    income_elasticities["CountryType"] == "Developed",
+                    f"elasticity_{haul}",
+                ]
+                - income_elasticities.loc[
+                    income_elasticities["CountryType"] == "Developing",
+                    f"elasticity_{haul}",
+                ]
+            ) / (high_income - lower_middle_income)
+            self.origin_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+            ] + gradient * (self.origin.income_USDpercap - lower_middle_income)
+        else:
+            self.origin_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
+            ]
+
+        # destination
+        if self.destination.country == 304:  # U.S. country code
+            self.destination_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
+            ]
+        elif self.destination.income_USDpercap < lower_middle_income:
+            self.destination_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+            ]
+        elif self.destination.income_USDpercap < high_income:
+            # linearly interpolate between developing and developed country elasticities
+            gradient = (
+                income_elasticities.loc[
+                    income_elasticities["CountryType"] == "Developed",
+                    f"elasticity_{haul}",
+                ]
+                - income_elasticities.loc[
+                    income_elasticities["CountryType"] == "Developing",
+                    f"elasticity_{haul}",
+                ]
+            ) / (high_income - lower_middle_income)
+            self.destination_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+            ] + gradient * (self.destination.income_USDpercap - lower_middle_income)
+        else:
+            self.destination_income_elasticity = income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
+            ]

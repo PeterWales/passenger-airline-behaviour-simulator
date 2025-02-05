@@ -247,7 +247,7 @@ def initialise_airlines(
 
 
 def initialise_routes(
-    cities: list, city_pair_data: pd.DataFrame, price_elasticities: pd.DataFrame
+    cities: list, city_pair_data: pd.DataFrame, price_elasticities: pd.DataFrame, income_elasticities: pd.DataFrame
 ) -> list:
     """
     Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
@@ -299,8 +299,9 @@ def initialise_routes(
             base_demand=route["BaseYearODDemandPax_Est"],
             base_fare=route["Fare_Est"],
         )
-        routes[origin_id][destination_id].update_route()
+        routes[origin_id][destination_id].update_route()  # calculate distance and save waypoints
         routes[origin_id][destination_id].update_price_elasticity()
-        
+        routes[origin_id][destination_id].update_income_elasticity(income_elasticities)
+
         route_id += 1
     return routes
