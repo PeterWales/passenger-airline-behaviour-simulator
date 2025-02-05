@@ -10,7 +10,9 @@ def main():
     n_runs = run_data.shape[0]
 
     for run_idx, run_parameters in run_data.iterrows():
-        print(f"Simulation {run_parameters['RunNumber']} of {n_runs}: {run_parameters['RunID']}")
+        print(f"\nSimulation {run_idx+1} of {n_runs}\n")
+        print(f"RunNumber: {run_parameters['RunNumber']}")
+        print(f"RunID:     {run_parameters['RunID']}\n")
 
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
         save_folder_path = os.path.join(file_path, "output")
