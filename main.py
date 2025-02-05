@@ -7,8 +7,11 @@ def main():
     # import data
     file_path = os.path.dirname(__file__)
     run_data = pd.read_csv(os.path.join(file_path, "RunParameters.csv"))
+    n_runs = run_data.shape[0]
 
     for run_idx, run_parameters in run_data.iterrows():
+        print(f"Simulation {run_parameters['RunNumber']} of {n_runs}: {run_parameters['RunID']}")
+
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
         save_folder_path = os.path.join(file_path, "output")
         if not os.path.exists(save_folder_path):
@@ -18,6 +21,8 @@ def main():
         )
 
         # import run-specific data
+        print(f"    Importing data from {data_path}")
+
         aircraft_data = pd.read_csv(os.path.join(data_path, "AircraftData.csv"))
         airport_data = pd.read_csv(os.path.join(data_path, "AirportData.csv"))
         city_data = pd.read_csv(os.path.join(data_path, "CityData.csv"))
@@ -29,11 +34,14 @@ def main():
         elasticities = pd.read_csv(os.path.join(data_path, "Elasticities.csv"))
 
         # create classes
+        print("    Initialising cities...")
         city_data.sort_values(by="CityID", inplace=True)
         cities = initialisation.initialise_cities(city_data, airport_data)
+        print("    Initialising airlines...")
         airlines = initialisation.initialise_airlines(
             fleet_data, country_data, run_parameters
         )
+        print("    Initialising routes...")
         routes = initialisation.initialise_routes(cities, city_pair_data, elasticities)
 
         # simulate base year

@@ -1,6 +1,7 @@
 import pandas as pd
 from operator import add
 import classes
+from tqdm import tqdm
 
 
 def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> list:
@@ -269,7 +270,14 @@ def initialise_routes(
 
     route_id = 0
 
-    for idx, route in city_pair_data.iterrows():
+    # show a progress bar because this step can take a while
+    for idx, route in tqdm(
+        city_pair_data.iterrows(),
+        total=city_pair_data.shape[0],
+        desc="        Routes created",
+        ascii=False,
+        ncols=75,
+    ):
         origin_id = int(route["OriginCityID"])
         destination_id = int(route["DestinationCityID"])
 
