@@ -127,60 +127,56 @@ class Route:
         route_id: int,
         origin: City,
         destination: City,
-        elasticities: pd.DataFrame,
         base_demand: int,
         base_fare: float,
+        elasticities: pd.DataFrame,
     ):
         self.route_id = route_id
-        self.distance, self.waypoints, self.price_elasticity = Route.calc_route(
-            origin, destination, elasticities
-        )
         self.origin = origin
         self.destination = destination
         self.base_demand = base_demand
         self.base_fare = base_fare
+        self.elasticities = elasticities
+        self.distance = None
+        self.waypoints = None
 
-    @staticmethod
-    def calc_route(
-        origin: City, destination: City, elasticities: pd.Series
-    ) -> tuple[float, list, dict]:
+    def update_route(self) -> None:
         """
         Use Haversine formula to calculate the great circle distance and route between the origin and destination cities.
-        Determine whether the route is long or short haul and assign the appropriate elasticity values.
         """
         # TODO: generate waypoints between origin and destination to route around airspace restrictions
 
-        long_haul = 3000  # distance in miles
-
-        waypoints = [
-            {"latitude": origin.latitude, "longitude": origin.longitude},
-            {"latitude": destination.latitude, "longitude": destination.longitude},
+        self.waypoints = [
+            {"latitude": self.origin.latitude, "longitude": self.origin.longitude},
+            {"latitude": self.destination.latitude, "longitude": self.destination.longitude},
         ]
 
         r = 6378000.0  # mean radius of the earth in meters
-        distance = 0.0
-        for wpt_num in range(len(waypoints) - 1):
+        self.distance = 0.0
+        for wpt_num in range(len(self.waypoints) - 1):
             term1 = 1.0 - np.cos(
                 np.deg2rad(
-                    waypoints[wpt_num+1]["latitude"]
-                    - waypoints[wpt_num]["latitude"]
+                    self.waypoints[wpt_num+1]["latitude"]
+                    - self.waypoints[wpt_num]["latitude"]
                 )
             )
             term2 = (
-                np.cos(np.deg2rad(waypoints[wpt_num]["latitude"]))
-                * np.cos(np.deg2rad(waypoints[wpt_num+1]["latitude"]))
-                * (1 - np.cos(np.deg2rad(waypoints[wpt_num+1]["longitude"] - waypoints[wpt_num]["longitude"])))
+                np.cos(np.deg2rad(self.waypoints[wpt_num]["latitude"]))
+                * np.cos(np.deg2rad(self.waypoints[wpt_num+1]["latitude"]))
+                * (1 - np.cos(np.deg2rad(self.waypoints[wpt_num+1]["longitude"] - self.waypoints[wpt_num]["longitude"])))
             )
             # Haversine Formula can result in numerical errors when origin and destination approach opposite sides of the earth
-            distance += min(2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)), np.pi * r)
+            self.distance += min(2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)), np.pi * r)
 
-        if distance < long_haul:
+    def update_elasticity(self) -> None:
+        """
+        Determine whether the route is long or short haul and assign the appropriate elasticity values.
+        """
+        if self.distance < 3000:  # arbitrary threshold for short haul
             haul = "SH"
         else:
             haul = "LH"
-        elasticity = {
-            "route": elasticities[f"route_{haul}"],
-            "national": elasticities[f"national_{haul}"],
+        self.elasticities = {
+            "route": self.elasticities[f"route_{haul}"],
+            "national": self.elasticities[f"national_{haul}"],
         }
-
-        return distance, waypoints, elasticity
