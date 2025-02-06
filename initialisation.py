@@ -120,7 +120,9 @@ def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> li
             country=city["Country"],
             local_region=city["LocalRegion"],
             capital_city=city["CapitalCity"],
+            base_population=city["BaseYearPopulation"],
             population=city["BaseYearPopulation"],
+            base_income_USDpercap=city["BaseYearIncome"],
             income_USDpercap=city["BaseYearIncome"],
             latitude=lat_sum / capacity_sum,
             longitude=city_longitude,
@@ -247,7 +249,11 @@ def initialise_airlines(
 
 
 def initialise_routes(
-    cities: list, city_pair_data: pd.DataFrame, price_elasticities: pd.DataFrame, income_elasticities: pd.DataFrame
+    cities: list,
+    city_pair_data: pd.DataFrame,
+    price_elasticities: pd.DataFrame,
+    income_elasticities: pd.DataFrame,
+    population_elasticity: float,
 ) -> list:
     """
     Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
@@ -295,13 +301,15 @@ def initialise_routes(
             route_id=route_id,
             origin=cities[origin_id],
             destination=cities[destination_id],
-            price_elasticities=price_elasticities_series,
             base_demand=route["BaseYearODDemandPax_Est"],
             base_fare=route["Fare_Est"],
+            price_elasticities=price_elasticities_series,
+            population_elasticity=population_elasticity,
         )
         routes[origin_id][destination_id].update_route()  # calculate distance and save waypoints
         routes[origin_id][destination_id].update_price_elasticity()
         routes[origin_id][destination_id].update_income_elasticity(income_elasticities)
+        routes[origin_id][destination_id].update_static_demand_factor()
 
         route_id += 1
     return routes

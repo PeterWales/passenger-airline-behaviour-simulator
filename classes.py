@@ -16,7 +16,9 @@ class City:
     country : int
     local_region : int
     capital_city : bool
+    base_population : float
     population : float
+    base_income_USDpercap : float
     income_USDpercap : float
         Mean income per capita in USD
     latitude : float
@@ -43,7 +45,9 @@ class City:
     country: int
     local_region: int
     capital_city: int
+    base_population: float
     population: float
+    base_income_USDpercap: float
     income_USDpercap: float
     latitude: float
     longitude: float
@@ -130,6 +134,7 @@ class Route:
         base_demand: int,
         base_fare: float,
         price_elasticities: pd.Series,
+        population_elasticity: float,
     ):
         self.route_id = route_id
         self.origin = origin
@@ -137,6 +142,8 @@ class Route:
         self.base_demand = base_demand
         self.base_fare = base_fare
         self.price_elasticities = price_elasticities
+        self.population_elasticity = population_elasticity
+        self.static_demand_factor = 1.0  # due to no change in GDP or population until after first year
         self.distance = None
         self.waypoints = None
         self.origin_income_elasticity = None
@@ -261,3 +268,37 @@ class Route:
             self.destination_income_elasticity = income_elasticities.loc[
                 income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
             ]
+
+    def update_static_demand_factor(self) -> None:
+        """
+        Calculate the total route demand factor from effects independent of fare.
+        """
+        income_factor_origin = 1 + (
+            ((self.origin.income_USDpercap - self.origin.base_income_USDpercap) 
+             / self.origin.base_income_USDpercap) * self.origin_income_elasticity)
+        
+        income_factor_destination = 1 + (
+            ((self.destination.income_USDpercap - self.destination.base_income_USDpercap) 
+             / self.destination.base_income_USDpercap) * self.destination_income_elasticity)
+        
+        # total income factor weighted by population * income
+        income_factor = (self.origin.population * self.origin.income_USDpercap * income_factor_origin
+                         + self.destination.population * self.destination.income_USDpercap * income_factor_destination) / (
+            self.origin.population * self.origin.income_USDpercap + self.destination.population * self.destination.income_USDpercap
+        )
+
+        population_factor_origin = 1 + (
+            ((self.origin.population - self.origin.base_population) 
+             / self.origin.base_population) * self.population_elasticity)
+        
+        population_factor_destination = 1 + (
+            ((self.destination.population - self.destination.base_population) 
+             / self.destination.base_population) * self.population_elasticity)
+        
+        # total population factor weighted by population * income
+        population_factor = (self.origin.population * self.origin.income_USDpercap * population_factor_origin
+                             + self.destination.population * self.destination.income_USDpercap * population_factor_destination) / (
+            self.origin.population * self.origin.income_USDpercap + self.destination.population * self.destination.income_USDpercap
+        )
+
+        self.static_demand_factor = income_factor * population_factor
