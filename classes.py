@@ -140,7 +140,9 @@ class Route:
         self.origin = origin
         self.destination = destination
         self.base_demand = base_demand
+        self.mean_demand = base_demand
         self.base_fare = base_fare
+        self.mean_fare = base_fare
         self.price_elasticities = price_elasticities
         self.population_elasticity = population_elasticity
         self.static_demand_factor = 1.0  # due to no change in GDP or population until after first year
@@ -310,3 +312,13 @@ class Route:
         )
 
         self.static_demand_factor = income_factor * population_factor
+
+    def update_demand(self) -> None:
+        """
+        Update the route demand based on fare and annual static factors.
+        """
+        # TODO: add input for national taxes
+        fare_factor = 1 + (((self.mean_fare - self.base_fare) / self.base_fare) * self.price_elasticities["route"])
+        # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
+
+        self.mean_demand = self.base_demand * fare_factor * self.static_demand_factor
