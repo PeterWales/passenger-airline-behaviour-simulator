@@ -273,32 +273,40 @@ class Route:
         """
         Calculate the total route demand factor from effects independent of fare.
         """
+        # assume demand originating from each city is proportional to the city's population * income
+        origin_demand_weight = (
+            (self.origin.population * self.origin.income_USDpercap)
+            / (self.origin.population * self.origin.income_USDpercap
+               + self.destination.population * self.destination.income_USDpercap)
+        )
+        destination_demand_weight = 1 - origin_demand_weight
+        
         income_factor_origin = 1 + (
             ((self.origin.income_USDpercap - self.origin.base_income_USDpercap) 
              / self.origin.base_income_USDpercap) * self.origin_income_elasticity)
-        
+
         income_factor_destination = 1 + (
             ((self.destination.income_USDpercap - self.destination.base_income_USDpercap) 
              / self.destination.base_income_USDpercap) * self.destination_income_elasticity)
-        
+
         # total income factor weighted by population * income
-        income_factor = (self.origin.population * self.origin.income_USDpercap * income_factor_origin
-                         + self.destination.population * self.destination.income_USDpercap * income_factor_destination) / (
-            self.origin.population * self.origin.income_USDpercap + self.destination.population * self.destination.income_USDpercap
+        income_factor = (
+            origin_demand_weight * income_factor_origin
+            + destination_demand_weight * income_factor_destination
         )
 
         population_factor_origin = 1 + (
             ((self.origin.population - self.origin.base_population) 
              / self.origin.base_population) * self.population_elasticity)
-        
+
         population_factor_destination = 1 + (
             ((self.destination.population - self.destination.base_population) 
              / self.destination.base_population) * self.population_elasticity)
-        
+
         # total population factor weighted by population * income
-        population_factor = (self.origin.population * self.origin.income_USDpercap * population_factor_origin
-                             + self.destination.population * self.destination.income_USDpercap * population_factor_destination) / (
-            self.origin.population * self.origin.income_USDpercap + self.destination.population * self.destination.income_USDpercap
+        population_factor = (
+            origin_demand_weight * population_factor_origin
+            + destination_demand_weight * population_factor_destination
         )
 
         self.static_demand_factor = income_factor * population_factor
