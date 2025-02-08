@@ -1,100 +1,7 @@
-from dataclasses import dataclass
+from city import City
 import numpy as np
 import pandas as pd
-
-
-@dataclass
-class City:
-    """
-    Class for keeping track of city data.
-
-    Attributes
-    ----------
-    city_id : int
-    city_name : str
-    region : int
-    country : int
-    local_region : int
-    capital_city : bool
-    base_population : float
-    population : float
-    base_income_USDpercap : float
-    income_USDpercap : float
-        Mean income per capita in USD
-    latitude : float
-    longitude : float
-    domestic_fees_USDperpax : float
-        landing fees in USD per passenger on an incoming domestic flight
-    domestic_fees_USDpermvmt : list
-        landing fees in USD per landing for an incoming domestic flight
-    international_fees_USDperpax : float
-        landing fees in USD per passenger on an incoming international flight
-    international_fees_USDpermvmt : list
-        landing fees in USD per landing for an incoming international flight
-    taxi_out_mins : float
-        Average time in minutes to get from gate to takeoff
-    taxi_in_mins : float
-        Average time in minutes to get from landing to gate
-    capacity_perhr : float
-        Maximum aircraft movements (takeoffs and landings) in any one hour
-    """
-
-    city_id: int
-    city_name: str
-    region: int
-    country: int
-    local_region: int
-    capital_city: int
-    base_population: float
-    population: float
-    base_income_USDpercap: float
-    income_USDpercap: float
-    latitude: float
-    longitude: float
-    domestic_fees_USDperpax: float
-    domestic_fees_USDpermvmt: list
-    international_fees_USDperpax: float
-    international_fees_USDpermvmt: list
-    taxi_out_mins: float
-    taxi_in_mins: float
-    capacity_perhr: float
-
-
-@dataclass
-class Aircraft:
-    """Class for keeping track of aircraft data"""
-
-    aircraft_id: int
-    seats: int
-    lease_USDpermonth: float
-    lease_annualmultiplier: float
-    age: int
-    operation_USDperhr: float
-    pilot_USDperhr: float  # per pilot
-    crew_USDperhr: float  # per cabin crew
-    maintenance_daysperyear: int
-    turnaround_hrs: float
-    op_empty_kg: float
-    max_fuel_kg: float
-    max_payload_kg: float  # including passengers and cargo, not fuel or crew
-    max_takeoff_kg: float
-    cruise_ms: float  # TAS in m/s
-    ceiling_ft: float
-
-    def annual_update(self) -> None:
-        self.lease_USDpermonth *= self.lease_annualmultiplier
-        self.age += 1
-
-
-@dataclass
-class Airline:
-    """Class for keeping track of airline data"""
-
-    airline_id: int
-    region: int
-    country: str
-    country_num: int
-    n_aircraft: list
+from tqdm import tqdm
 
 
 class Route:
@@ -150,6 +57,73 @@ class Route:
         self.waypoints = None
         self.origin_income_elasticity = None
         self.destination_income_elasticity = None
+
+    @staticmethod
+    def initialise_routes(
+        cities: list,
+        city_pair_data: pd.DataFrame,
+        price_elasticities: pd.DataFrame,
+        income_elasticities: pd.DataFrame,
+        population_elasticity: float,
+    ) -> list:
+        """
+        Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
+
+        Parameters
+        ----------
+        cities : list of instances of City dataclass
+        city_pair_data : pd.DataFrame
+        price_elasticities : pd.DataFrame
+
+        Returns
+        -------
+        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
+        """
+        # order price_elasticities dataframe by OD_1 and OD_2
+        price_elasticities = price_elasticities.sort_values(by=["OD_1", "OD_2"])
+
+        n_cities = len(cities)
+        routes = [[None for _ in range(n_cities)] for _ in range(n_cities)]
+
+        route_id = 0
+
+        # show a progress bar because this step can take a while
+        for idx, route in tqdm(
+            city_pair_data.iterrows(),
+            total=city_pair_data.shape[0],
+            desc="        Routes created",
+            ascii=False,
+            ncols=75,
+        ):
+            origin_id = int(route["OriginCityID"])
+            destination_id = int(route["DestinationCityID"])
+
+            if origin_id == 0 or destination_id == 0 or origin_id == destination_id:
+                continue
+
+            # find the elasticity values for the current route - note OD_1 <= OD_2
+            price_elasticities_series = price_elasticities.loc[
+                (price_elasticities["OD_1"] == min(cities[origin_id].region, cities[destination_id].region))
+                & (price_elasticities["OD_2"] == max(cities[origin_id].region, cities[destination_id].region))
+            ]
+            price_elasticities_series = price_elasticities_series.squeeze()  # convert from DataFrame to Series
+
+            routes[origin_id][destination_id] = Route(
+                route_id=route_id,
+                origin=cities[origin_id],
+                destination=cities[destination_id],
+                base_demand=route["BaseYearODDemandPax_Est"],
+                base_fare=route["Fare_Est"],
+                price_elasticities=price_elasticities_series,
+                population_elasticity=population_elasticity,
+            )
+            routes[origin_id][destination_id].update_route()  # calculate distance and save waypoints
+            routes[origin_id][destination_id].update_price_elasticity()
+            routes[origin_id][destination_id].update_income_elasticity(income_elasticities)
+            routes[origin_id][destination_id].update_static_demand_factor()
+
+            route_id += 1
+        return routes
 
     def update_route(self) -> None:
         """

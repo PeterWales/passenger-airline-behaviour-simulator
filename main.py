@@ -1,6 +1,8 @@
 import os
 import pandas as pd
-import initialisation
+from city import City
+from airline import Airline
+from route import Route
 
 
 def main():
@@ -39,13 +41,13 @@ def main():
         # create classes
         print("    Initialising cities...")
         city_data.sort_values(by="CityID", inplace=True)
-        cities = initialisation.initialise_cities(city_data, airport_data)
+        cities = City.initialise_cities(city_data, airport_data)
         print("    Initialising airlines...")
-        airlines = initialisation.initialise_airlines(
+        airlines = Airline.initialise_airlines(
             fleet_data, country_data, run_parameters
         )
         print("    Initialising routes...")
-        routes = initialisation.initialise_routes(
+        routes = Route.initialise_routes(
             cities,
             city_pair_data,
             price_elasticities,
