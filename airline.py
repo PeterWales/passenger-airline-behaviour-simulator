@@ -14,7 +14,9 @@ class Airline:
 
     @staticmethod
     def initialise_airlines(
-        fleet_data: pd.DataFrame, country_data: pd.DataFrame, run_parameters: pd.DataFrame
+        fleet_data: pd.DataFrame,
+        country_data: pd.DataFrame,
+        run_parameters: pd.DataFrame,
     ) -> list:
         """
         Generate list of instances of Airline dataclass from contents of FleetData and CountryData files
@@ -40,7 +42,8 @@ class Airline:
         }
 
         country_data["GDP"] = (
-            country_data["PPP_GDP_Cap_Year2015USD_2015"] * country_data["Population_2015"]
+            country_data["PPP_GDP_Cap_Year2015USD_2015"]
+            * country_data["Population_2015"]
         )
         country_data["Region_GDP_Proportion"] = 0.0  # initialise with zeros
 

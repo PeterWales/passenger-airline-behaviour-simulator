@@ -117,7 +117,9 @@ class City:
                         airport_data["AirportID"] == airport_id
                     ].tolist()[0]
 
-                    capacity_sum += float(airport_data.at[airport_row, "Capacity_movts_hr"])
+                    capacity_sum += float(
+                        airport_data.at[airport_row, "Capacity_movts_hr"]
+                    )
 
                     lat_sum += float(airport_data.at[airport_row, "Latitude"]) * float(
                         airport_data.at[airport_row, "Capacity_movts_hr"]
@@ -135,28 +137,55 @@ class City:
                         airport_data.at[airport_row, "Capacity_movts_hr"]
                     )
 
-                    dom_fee_pax_sum += float(airport_data.at[airport_row, "LandingCosts_PerPax_Domestic_2015USdollars"])
+                    dom_fee_pax_sum += float(
+                        airport_data.at[
+                            airport_row, "LandingCosts_PerPax_Domestic_2015USdollars"
+                        ]
+                    )
                     dom_fee_mov_sum = list(
                         map(
-                            add, dom_fee_mov_sum, [
-                                float(airport_data.at[airport_row, f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"])
+                            add,
+                            dom_fee_mov_sum,
+                            [
+                                float(
+                                    airport_data.at[
+                                        airport_row,
+                                        f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars",
+                                    ]
+                                )
                                 for ac in range(n_aircraft)
-                            ]
+                            ],
                         )
                     )
 
-                    intnl_fee_pax_sum += float(airport_data.at[airport_row, "LandingCosts_PerPax_International_2015USdollars"])
+                    intnl_fee_pax_sum += float(
+                        airport_data.at[
+                            airport_row,
+                            "LandingCosts_PerPax_International_2015USdollars",
+                        ]
+                    )
                     intnl_fee_mov_sum = list(
                         map(
-                            add, intnl_fee_mov_sum, [
-                                float(airport_data.at[airport_row, f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"])
+                            add,
+                            intnl_fee_mov_sum,
+                            [
+                                float(
+                                    airport_data.at[
+                                        airport_row,
+                                        f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars",
+                                    ]
+                                )
                                 for ac in range(n_aircraft)
-                            ]
+                            ],
                         )
                     )
 
-                    taxi_out_sum += float(airport_data.at[airport_row, "UnimpTaxiOut_min"])
-                    taxi_in_sum += float(airport_data.at[airport_row, "UnimpTaxiIn_min"])
+                    taxi_out_sum += float(
+                        airport_data.at[airport_row, "UnimpTaxiOut_min"]
+                    )
+                    taxi_in_sum += float(
+                        airport_data.at[airport_row, "UnimpTaxiIn_min"]
+                    )
                 else:
                     # airport_id == 0 => there are no more airports for that city
                     break
@@ -196,4 +225,3 @@ class City:
             )
 
         return cities
-    

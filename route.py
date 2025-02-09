@@ -103,10 +103,17 @@ class Route:
 
             # find the elasticity values for the current route - note OD_1 <= OD_2
             price_elasticities_series = price_elasticities.loc[
-                (price_elasticities["OD_1"] == min(cities[origin_id].region, cities[destination_id].region))
-                & (price_elasticities["OD_2"] == max(cities[origin_id].region, cities[destination_id].region))
+                (
+                    price_elasticities["OD_1"]
+                    == min(cities[origin_id].region, cities[destination_id].region)
+                )
+                & (
+                    price_elasticities["OD_2"]
+                    == max(cities[origin_id].region, cities[destination_id].region)
+                )
             ]
-            price_elasticities_series = price_elasticities_series.squeeze()  # convert from DataFrame to Series
+            # convert from DataFrame to Series
+            price_elasticities_series = price_elasticities_series.squeeze()
 
             routes[origin_id][destination_id] = Route(
                 route_id=route_id,
@@ -117,7 +124,9 @@ class Route:
                 price_elasticities=price_elasticities_series,
                 population_elasticity=population_elasticity,
             )
-            routes[origin_id][destination_id].update_route()  # calculate distance and save waypoints
+            # calculate distance and save waypoints
+            routes[origin_id][destination_id].update_route()
+            # calculate initial elasticities and static demand factor
             routes[origin_id][destination_id].update_price_elasticity()
             routes[origin_id][destination_id].update_income_elasticity(income_elasticities)
             routes[origin_id][destination_id].update_static_demand_factor()
@@ -132,8 +141,14 @@ class Route:
         # TODO: generate waypoints between origin and destination to route around airspace restrictions
 
         self.waypoints = [
-            {"latitude": self.origin.latitude, "longitude": self.origin.longitude},
-            {"latitude": self.destination.latitude, "longitude": self.destination.longitude},
+            {
+                "latitude": self.origin.latitude,
+                "longitude": self.origin.longitude
+            },
+            {
+                "latitude": self.destination.latitude,
+                "longitude": self.destination.longitude,
+            },
         ]
 
         r = 6378000.0  # mean radius of the earth in meters
@@ -141,23 +156,30 @@ class Route:
         for wpt_num in range(len(self.waypoints) - 1):
             term1 = 1.0 - np.cos(
                 np.deg2rad(
-                    self.waypoints[wpt_num+1]["latitude"]
+                    self.waypoints[wpt_num + 1]["latitude"]
                     - self.waypoints[wpt_num]["latitude"]
                 )
             )
             term2 = (
                 np.cos(np.deg2rad(self.waypoints[wpt_num]["latitude"]))
                 * np.cos(np.deg2rad(self.waypoints[wpt_num+1]["latitude"]))
-                * (1 - np.cos(np.deg2rad(self.waypoints[wpt_num+1]["longitude"] - self.waypoints[wpt_num]["longitude"])))
+                * (1 - np.cos(np.deg2rad(
+                    self.waypoints[wpt_num+1]["longitude"]
+                    - self.waypoints[wpt_num]["longitude"]))
+                )
             )
             # Haversine Formula can result in numerical errors when origin and destination approach opposite sides of the earth
-            self.distance += min(2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)), np.pi * r)
+            self.distance += min(
+                2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)),
+                np.pi * r
+            )
 
     def update_price_elasticity(self) -> None:
         """
         Determine whether the route is long or short haul and assign the appropriate elasticity values.
         """
-        if self.distance < 3000 * 1609.344:  # arbitrary threshold for short/long haul (3000 miles)
+        if (self.distance < 3000 * 1609.344):
+            # arbitrary threshold for short/long haul (3000 miles)
             haul = "SH"
         else:
             haul = "LH"
@@ -173,11 +195,14 @@ class Route:
         # TODO: determine U.S. country code programmatically
         # TODO: add a static function to avoid code duplication
 
-        if self.distance < 1000 * 1609.344:  # arbitrary threshold for short/medium haul (1000 miles)
+        if self.distance < 1000 * 1609.344:
+            # arbitrary threshold for short/medium haul (1000 miles)
             haul = "SH"
-        elif self.distance < 3000 * 1609.344:  # arbitrary threshold for medium/long haul (3000 miles)
+        elif self.distance < 3000 * 1609.344:
+            # arbitrary threshold for medium/long haul (3000 miles)
             haul = "MH"
-        elif self.distance < 5000 * 1609.344:  # arbitrary threshold for long/ultra long haul (5000 miles)
+        elif self.distance < 5000 * 1609.344:
+            # arbitrary threshold for long/ultra long haul (5000 miles)
             haul = "LH"
         else:
             haul = "ULH"
@@ -292,7 +317,10 @@ class Route:
         Update the route demand based on fare and annual static factors.
         """
         # TODO: add input for national taxes
-        fare_factor = 1 + (((self.mean_fare - self.base_fare) / self.base_fare) * self.price_elasticities["route"])
+        fare_factor = 1 + (
+            ((self.mean_fare - self.base_fare) / self.base_fare)
+            * self.price_elasticities["route"]
+        )
         # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
 
         self.mean_demand = self.base_demand * fare_factor * self.static_demand_factor
