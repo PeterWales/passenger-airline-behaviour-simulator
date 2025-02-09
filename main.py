@@ -41,18 +41,25 @@ def main():
         # create classes
         print("    Initialising cities...")
         city_data.sort_values(by="CityID", inplace=True)
-        cities = City.initialise_cities(city_data, airport_data)
+        cities = City.initialise_cities(
+            city_data=city_data,
+            airport_data=airport_data,
+        )
+
         print("    Initialising airlines...")
         airlines = Airline.initialise_airlines(
-            fleet_data, country_data, run_parameters
+            fleet_data=fleet_data,
+            country_data=country_data,
+            run_parameters=run_parameters,
         )
+
         print("    Initialising routes...")
         routes = Route.initialise_routes(
-            cities,
-            city_pair_data,
-            price_elasticities,
-            income_elasticities,
-            run_parameters["PopulationElasticity"],
+            cities=cities,
+            city_pair_data=city_pair_data,
+            price_elasticities=price_elasticities,
+            income_elasticities=income_elasticities,
+            population_elasticity=run_parameters["PopulationElasticity"],
         )
 
         # simulate base year

@@ -4,7 +4,23 @@ import pandas as pd
 
 @dataclass
 class Airline:
-    """Class for keeping track of airline data"""
+    """
+    Class for keeping track of airline data
+
+    Attributes
+    ----------
+    airline_id : int
+    region : int
+    country : str
+    country_num : int
+    n_aircraft : list
+        Number of aircraft of each type assigned to the airline
+    
+    Methods
+    -------
+    initialise_airlines(fleet_data, country_data, run_parameters)
+        Generate list of instances of Airline dataclass from contents of FleetData and CountryData files
+    """
 
     airline_id: int
     region: int

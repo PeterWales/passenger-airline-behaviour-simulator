@@ -11,26 +11,65 @@ class Route:
     Attributes
     ----------
     route_id : int
-    distance : float
-        Great circle distance in meters between origin and destination cities
-    waypoints : list
-        List of dictionaries with latitude and longitude keys
     origin : City
-        Instance of City dataclass for the origin city
+        Instance of City dataclass for origin city
     destination : City
-        Instance of City dataclass for the destination city
+        Instance of City dataclass for destination city
     base_demand : int
-        Passengers per year
-    base_fare : float
-        Fare in USD per passenger
-    price_elasticity : dict
-        Dictionary with keys "route" and "national"
+        Base year demand for the route in passengers
+    current_demand : int
+        Current year demand for the route in passengers
+        Total demand for all itineraries
+    base_mean_fare : float
+        Base year mean fare (all itineraries) for the route in USD
+    mean_fare : float
+        Current year mean fare (all itineraries) for the route in USD
+    price_elasticities : pd.Series
+        Price elasticity of demand values for the route
+        Initially contains fields:
+            route_SH, route_LH, national_SH, national_LH
+        Additional fields are added upon first call to update_price_elasticity:
+            route, national
+    population_elasticity : float
+        Population elasticity of demand for the route
+    static_demand_factor : float
+        Factor for demand independent of fare, valid for the current year
+    distance : float
+        Great circle distance between origin and destination cities in meters
+    waypoints : list
+        List of dictionaries containing latitude and longitude of waypoints
+    origin_income_elasticity : float
+        Income elasticity of demand for the origin city
+    destination_income_elasticity : float
+        Income elasticity of demand for the destination city
 
     Methods
     -------
-    calc_route(origin: City, destination: City, elasticities: pd.Series) -> tuple[float, list, dict]
-        Calculate the great circle route between the origin and destination cities
-        Returns the distance in meters, a list of waypoints and a dictionary of price elasticities
+    initialise_routes(
+        cities: list,
+        city_pair_data: pd.DataFrame,
+        price_elasticities: pd.DataFrame,
+        income_elasticities: pd.DataFrame,
+        population_elasticity: float
+    ) -> list
+        Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
+    
+    update_route() -> None
+        Use Haversine formula to calculate the great circle distance and route between the origin and destination cities
+    
+    update_price_elasticity() -> None
+        Determine whether the route is long or short haul and assign the appropriate elasticity values
+    
+    update_income_elasticity(income_elasticities: pd.DataFrame) -> None
+        Determine whether the route is short/medium/long/ultra long haul.
+        Determine whether the origin and destination are in the U.S., another developed country or a developing country.
+        Assign the appropriate income elasticity values
+
+    update_static_demand_factor() -> None
+        Calculate the total route demand factor from effects independent of fare
+    
+    update_demand() -> None
+        Update the route demand based on fare and annual static factors
     """
 
     def __init__(
@@ -39,7 +78,7 @@ class Route:
         origin: City,
         destination: City,
         base_demand: int,
-        base_fare: float,
+        base_mean_fare: float,
         price_elasticities: pd.Series,
         population_elasticity: float,
     ):
@@ -47,9 +86,9 @@ class Route:
         self.origin = origin
         self.destination = destination
         self.base_demand = base_demand
-        self.mean_demand = base_demand
-        self.base_fare = base_fare
-        self.mean_fare = base_fare
+        self.current_demand = base_demand
+        self.base_mean_fare = base_mean_fare
+        self.mean_fare = base_mean_fare
         self.price_elasticities = price_elasticities
         self.population_elasticity = population_elasticity
         self.static_demand_factor = 1.0  # due to no change in GDP or population until after first year
@@ -74,6 +113,8 @@ class Route:
         cities : list of instances of City dataclass
         city_pair_data : pd.DataFrame
         price_elasticities : pd.DataFrame
+        income_elasticities : pd.DataFrame
+        population_elasticity : float
 
         Returns
         -------
@@ -120,7 +161,7 @@ class Route:
                 origin=cities[origin_id],
                 destination=cities[destination_id],
                 base_demand=route["BaseYearODDemandPax_Est"],
-                base_fare=route["Fare_Est"],
+                base_mean_fare=route["Fare_Est"],
                 price_elasticities=price_elasticities_series,
                 population_elasticity=population_elasticity,
             )
@@ -137,6 +178,7 @@ class Route:
     def update_route(self) -> None:
         """
         Use Haversine formula to calculate the great circle distance and route between the origin and destination cities.
+        Updates self.distance and self.waypoints.
         """
         # TODO: generate waypoints between origin and destination to route around airspace restrictions
 
@@ -177,6 +219,7 @@ class Route:
     def update_price_elasticity(self) -> None:
         """
         Determine whether the route is long or short haul and assign the appropriate elasticity values.
+        Updates/adds self.price_elasticities["route"] and self.price_elasticities["national"].
         """
         if (self.distance < 3000 * 1609.344):
             # arbitrary threshold for short/long haul (3000 miles)
@@ -191,6 +234,12 @@ class Route:
         Determine whether the route is short/medium/long/ultra long haul.
         Determine whether the origin and destination are in the U.S., another developed country or a developing country.
         Assign the appropriate income elasticity values.
+
+        Parameters
+        ----------
+        income_elasticities : pd.DataFrame
+
+        Updates self.origin_income_elasticity and self.destination_income_elasticity.
         """
         # TODO: determine U.S. country code programmatically
         # TODO: add a static function to avoid code duplication
@@ -273,6 +322,8 @@ class Route:
     def update_static_demand_factor(self) -> None:
         """
         Calculate the total route demand factor from effects independent of fare.
+
+        Updates self.static_demand_factor.
         """
         # assume demand originating from each city is proportional to the city's population * income
         origin_demand_weight = (
@@ -315,12 +366,14 @@ class Route:
     def update_demand(self) -> None:
         """
         Update the route demand based on fare and annual static factors.
+
+        Updates self.current_demand.
         """
         # TODO: add input for national taxes
         fare_factor = 1 + (
-            ((self.mean_fare - self.base_fare) / self.base_fare)
+            ((self.mean_fare - self.base_mean_fare) / self.base_mean_fare)
             * self.price_elasticities["route"]
         )
         # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
 
-        self.mean_demand = self.base_demand * fare_factor * self.static_demand_factor
+        self.current_demand = self.base_demand * fare_factor * self.static_demand_factor

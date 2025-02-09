@@ -17,26 +17,36 @@ class City:
     local_region : int
     capital_city : bool
     base_population : float
+        Base year population of city
     population : float
+        Current year population of city
     base_income_USDpercap : float
+        Base year income per capita of city in USD
     income_USDpercap : float
-        Mean income per capita in USD
+        Current year income per capita of city in USD
     latitude : float
+        Capacity-weighted mean latitude of airports in city
     longitude : float
+        Capacity-weighted mean longitude of airports in city
     domestic_fees_USDperpax : float
-        landing fees in USD per passenger on an incoming domestic flight
+        Capacity-weighted landing fees in USD per passenger on an incoming domestic flight
     domestic_fees_USDpermvmt : list
-        landing fees in USD per landing for an incoming domestic flight
+        Capacity-weighted landing fees in USD per landing for an incoming domestic flight
     international_fees_USDperpax : float
-        landing fees in USD per passenger on an incoming international flight
+        Capacity-weighted landing fees in USD per passenger on an incoming international flight
     international_fees_USDpermvmt : list
-        landing fees in USD per landing for an incoming international flight
+        Capacity-weighted landing fees in USD per landing for an incoming international flight
     taxi_out_mins : float
-        Average time in minutes to get from gate to takeoff
+        Capacity-weighted time in minutes to get from gate to takeoff
     taxi_in_mins : float
-        Average time in minutes to get from landing to gate
+        Capacity-weighted time in minutes to get from landing to gate
     capacity_perhr : float
-        Maximum aircraft movements (takeoffs and landings) in any one hour
+        Sum of maximum aircraft movements (takeoffs and landings) in any one hour for all airports in city
+
+    Methods
+    -------
+    initialise_cities(city_data, airport_data)
+        Generate list of instances of City dataclass from contents of CityData and AirportData files
     """
 
     city_id: int
@@ -69,6 +79,7 @@ class City:
         Parameters
         ----------
         city_data : pd.DataFrame
+            sorted by CityID
         airport_data : pd.DataFrame
 
         Returns
@@ -88,14 +99,14 @@ class City:
         cities = [None] * (last_city_id + 1)
 
         # loop over rows of city_data
-        # for idx, city in city_data.iterrows():
         for city_id in range(last_city_id + 1):
             # check whether city_id is a CityID in city_data
             if not (city_id in city_data["CityID"].values):
                 continue  # leave cities[city_id] as None
 
             city = city_data.loc[city_data["CityID"] == city_id]
-            city = city.squeeze()  # convert from DataFrame to Series
+            # convert from DataFrame to Series
+            city = city.squeeze()
 
             # calculate capacity-weighted mean of airport data
             capacity_sum = 0.0
