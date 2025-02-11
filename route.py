@@ -42,6 +42,8 @@ class Route:
         Income elasticity of demand for the origin city
     destination_income_elasticity : float
         Income elasticity of demand for the destination city
+    seat_flights_per_year : int
+        Total number of seat flights per year on the route across all itineraries
 
     Methods
     -------
@@ -96,6 +98,7 @@ class Route:
         self.waypoints = None
         self.origin_income_elasticity = None
         self.destination_income_elasticity = None
+        self.seat_flights_per_year = 0
 
     @staticmethod
     def initialise_routes(
@@ -118,7 +121,7 @@ class Route:
 
         Returns
         -------
-        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
+        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID][DestinationCityID]
         """
         # order price_elasticities dataframe by OD_1 and OD_2
         price_elasticities = price_elasticities.sort_values(by=["OD_1", "OD_2"])
@@ -262,7 +265,7 @@ class Route:
         high_income = 14005
 
         # origin
-        if self.origin.country == 304:  # U.S. country code
+        if self.origin.country == 204:  # U.S. country code
             self.origin_income_elasticity = income_elasticities.loc[
                 income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
             ]
@@ -291,7 +294,7 @@ class Route:
             ]
 
         # destination
-        if self.destination.country == 304:  # U.S. country code
+        if self.destination.country == 204:  # U.S. country code
             self.destination_income_elasticity = income_elasticities.loc[
                 income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
             ]
