@@ -191,28 +191,56 @@ class Aircraft:
         
         Updates self.flights_per_year
         """
-        # TODO: account for flights that stop to refuel
         curfew_time = 7  # assume airports are closed between 11pm and 6am
 
-        flight_time_hrs = routes[self.route_origin][self.route_destination].distance / (self.cruise_ms * 3600)
-        mean_leg_hrs = (
-            flight_time_hrs + self.turnaround_hrs
-            + (
-                sum(
-                    routes[self.route_origin][self.route_destination].origin.taxi_out_mins,
-                    routes[self.route_origin][self.route_destination].destination.taxi_in_mins,
-                    routes[self.route_origin][self.route_destination].destination.taxi_out_mins,
-                    routes[self.route_origin][self.route_destination].origin.taxi_in_mins,
-                ) / (60 * 2)
+        if self.fuel_stop is None:
+            flight_time_hrs = routes[self.route_origin][self.route_destination].distance / (self.cruise_ms * 3600)
+            mean_one_way_hrs = (
+                flight_time_hrs + self.turnaround_hrs
+                + (
+                    sum(
+                        routes[self.route_origin][self.route_destination].origin.taxi_out_mins,
+                        routes[self.route_origin][self.route_destination].destination.taxi_in_mins,
+                        routes[self.route_origin][self.route_destination].destination.taxi_out_mins,
+                        routes[self.route_origin][self.route_destination].origin.taxi_in_mins,
+                    ) / (60 * 2)
+                )
             )
-        )
 
-        if mean_leg_hrs > curfew_time:
-            # assume aircraft can be airborne through the night to avoid curfew
-            legs_per_48hrs = math.floor(48 / mean_leg_hrs)
+            if flight_time_hrs > curfew_time:
+                # assume aircraft can be airborne through the night to avoid curfew
+                legs_per_48hrs = math.floor(48 / mean_one_way_hrs)
+            else:
+                # assume aircraft must be grounded during curfew
+                legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
         else:
-            # assume aircraft must be grounded during curfew
-            legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_leg_hrs)
+            flight_time_1_hrs = (
+                routes[self.route_origin][self.fuel_stop].distance
+            ) / (self.cruise_ms * 3600)
+            flight_time_2_hrs = (
+                routes[self.fuel_stop][self.route_destination].distance
+            ) / (self.cruise_ms * 3600)
+
+            mean_one_way_hrs = (
+                flight_time_1_hrs + flight_time_2_hrs + 2*self.turnaround_hrs
+                + (
+                    sum(
+                        routes[self.route_origin][self.route_destination].origin.taxi_out_mins,
+                        routes[self.route_origin][self.route_destination].destination.taxi_in_mins,
+                        routes[self.route_origin][self.route_destination].destination.taxi_out_mins,
+                        routes[self.route_origin][self.route_destination].origin.taxi_in_mins,
+                        2*routes[self.route_origin][self.fuel_stop].destination.taxi_in_mins,
+                        2*routes[self.route_origin][self.fuel_stop].destination.taxi_out_mins,
+                    ) / (60 * 2)
+                )
+            )
+
+            if flight_time_1_hrs > curfew_time or flight_time_2_hrs > curfew_time:
+                # assume aircraft can be airborne through the night to avoid curfew
+                legs_per_48hrs = math.floor(48 / mean_one_way_hrs)
+            else:
+                # assume aircraft must be grounded during curfew
+                legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
 
         days_operational = 365 - self.maintenance_daysperyear
         self.flights_per_year = math.floor((legs_per_48hrs * (days_operational / 2))/2)
