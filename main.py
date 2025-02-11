@@ -5,6 +5,7 @@ from airline import Airline
 from route import Route
 from aircraft import Aircraft
 import random
+from tqdm import tqdm
 
 
 def main():
@@ -80,8 +81,20 @@ def main():
         )
 
         # initialise airline fleet assignment
-        for airline in airlines:
-            airline.initialise_fleet_assignment(routes, aircraft_data, city_lookup, randomGen, run_parameters["StartYear"])
+        for airline in tqdm(
+            airlines,
+            desc="        Fleet assignment",
+            ascii=False,
+            ncols=75,
+        ):
+            airline.initialise_fleet_assignment(
+                routes,
+                cities,
+                aircraft_data,
+                city_lookup,
+                randomGen,
+                run_parameters["StartYear"]
+            )
 
         # simulate base year
 
