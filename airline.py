@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import pandas as pd
 import numpy as np
 from aircraft import Aircraft
+from route import Route
 
 
 @dataclass
@@ -160,15 +161,34 @@ class Airline:
     def initialise_fleet_assignment(
         self,
         routes: list,
+        cities: list,
         aircraft_data: pd.DataFrame,
         city_lookup: list,
         randomGen: np.random.Generator,
         year: int,
     ) -> None:
         """
-        Assign aircraft to routes based on base RPKs
+        Assign aircraft to routes based on base demand, aircraft range and runway required
+
+        Parameters
+        ----------
+        routes : list
+            list of lists of Route instances
+        cities : list
+            list of City instances
+        aircraft_data : pd.DataFrame
+            dataframe containing aircraft data
+        city_lookup : list
+            list of lists of city IDs by country code
+        randomGen : np.random.Generator
+            random number generator
+        year : int
+            calendar year
+        
+        Updates self.aircraft, self.airline_routes, and Route instances in-place
         """
         # TODO: enable EU airlines to operate routes between all EU countries
+        # TODO: move aircraft creation and following lines into a function to avoid code duplication
 
         min_load_factor = 0.8  # minimum load factor for an aircraft to be assigned to a route
 
@@ -219,13 +239,13 @@ class Airline:
                         # check origin and destination runways are long enough
                         if (
                             (routes[origin_id][destination_id].origin.longest_runway_m > aircraft["TakeoffDist_m"])
-                            & (routes[origin_id][destination_id].origin.longest_runway_m > aircraft["LandingDist_m"])
-                            & (routes[origin_id][destination_id].destination.longest_runway_m > aircraft["TakeoffDist_m"])
-                            & (routes[origin_id][destination_id].destination.longest_runway_m > aircraft["LandingDist_m"])
+                            and (routes[origin_id][destination_id].origin.longest_runway_m > aircraft["LandingDist_m"])
+                            and (routes[origin_id][destination_id].destination.longest_runway_m > aircraft["TakeoffDist_m"])
+                            and (routes[origin_id][destination_id].destination.longest_runway_m > aircraft["LandingDist_m"])
                         ):
                             while(
                                 (seats / aircraft["Seats"] > min_load_factor)
-                                & (aircraft_avail[aircraft_size] > 0)
+                                and (aircraft_avail[aircraft_size] > 0)
                             ):
                                 seats -= aircraft["Seats"]  # can go negative
                                 aircraft_avail[aircraft_size] -= 1
@@ -269,7 +289,7 @@ class Airline:
                                 # update airline-specific route dataframe
                                 not_route_exists = self.airline_routes[
                                     (self.airline_routes["origin"] == origin_id)
-                                    & (self.airline_routes["destination"] == destination_id)
+                                    and (self.airline_routes["destination"] == destination_id)
                                 ].empty
                                 if not_route_exists:
                                     self.airline_routes = self.airline_routes.append(
@@ -285,18 +305,99 @@ class Airline:
                                 else:
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        & (self.airline_routes["destination"] == destination_id),
+                                        and (self.airline_routes["destination"] == destination_id),
                                         "aircraft_ids"
                                     ].append(aircraft_id)
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        & (self.airline_routes["destination"] == destination_id),
+                                        and (self.airline_routes["destination"] == destination_id),
                                         "seat_flights_per_year"
                                     ] += self.aircraft[-1].flights_per_year * self.aircraft[-1].seats
 
                     elif distance < 2*aircraft["TypicalRange_m"]:
                         # aircraft doesn't have enough range - try with a fuel stop
-                        
+                        fuel_stop = Route.find_fuel_stop(
+                            routes,
+                            cities,
+                            origin_id,
+                            destination_id,
+                            aircraft["TypicalRange_m"],
+                            min(
+                                aircraft["TakeoffDist_m"],
+                                aircraft["LandingDist_m"]
+                            )
+                        )
+                        if fuel_stop is not None:  # None if route not possible wih a stop for that aircraft
+                            while(
+                                (seats / aircraft["Seats"] > min_load_factor)
+                                and (aircraft_avail[aircraft_size] > 0)
+                            ):
+                                seats -= aircraft["Seats"]  # can go negative
+                                aircraft_avail[aircraft_size] -= 1
+                                # create aircraft instance and assign to route, randomise age
+                                aircraft_id += 1
+                                self.aircraft.append(
+                                    Aircraft(
+                                        aircraft_id=aircraft_id,
+                                        aircraft_size=aircraft_size,
+                                        seats=aircraft["Seats"],
+                                        lease_new_USDpermonth=aircraft["LeaseRateNew_USDPerMonth"],
+                                        lease_annualmultiplier=aircraft["LeaseRateAnnualMultiplier"],
+                                        age=randomGen.randint(0, aircraft["RetirementAge_years"]-1),
+                                        operation_USDperhr=aircraft["OpCost_USDPerHr"],
+                                        pilot_USDperhr=aircraft["PilotCost_USDPerPilotPerHr"],
+                                        crew_USDperhr=aircraft["CrewCost_USDPerCrewPerHr"],
+                                        maintenance_daysperyear=aircraft["MaintenanceDays_PerYear"],
+                                        turnaround_hrs=aircraft["Turnaround_hrs"],
+                                        op_empty_kg=aircraft["OEM_kg"],
+                                        max_fuel_kg=aircraft["MaxFuel_kg"],
+                                        max_payload_kg=aircraft["MaxPayload_kg"],
+                                        max_takeoff_kg=aircraft["MTOM_kg"],
+                                        cruise_ms=aircraft["CruiseV_ms"],
+                                        ceiling_ft=aircraft["Ceiling_ft"],
+                                        breguet_gradient=aircraft["Breguet_gradient"],
+                                        breguet_intercept=aircraft["Breguet_intercept"],
+                                        retirement_age=aircraft["RetirementAge_years"],
+                                        calendar_year=year,
+                                        route_origin=origin_id,
+                                        route_destination=destination_id,
+                                        fuel_stop=fuel_stop,
+                                    )
+                                )
+                                self.aircraft[-1].update_flights_per_year(routes)
+
+                                # update Route in-place
+                                routes[origin_id][destination_id].seat_flights_per_year += (
+                                    self.aircraft[-1].flights_per_year * self.aircraft[-1].seats
+                                )
+
+                                # update airline-specific route dataframe
+                                not_route_exists = self.airline_routes[
+                                    (self.airline_routes["origin"] == origin_id)
+                                    and (self.airline_routes["destination"] == destination_id)
+                                ].empty
+                                if not_route_exists:
+                                    self.airline_routes = self.airline_routes.append(
+                                        {
+                                            "origin": origin_id,
+                                            "destination": destination_id,
+                                            "fare": routes[origin_id][destination_id].base_mean_fare,
+                                            "aircraft_ids": [aircraft_id],
+                                            "seat_flights_per_year": self.aircraft[-1].flights_per_year * self.aircraft[-1].seats,
+                                        },
+                                        ignore_index=True,
+                                    )
+                                else:
+                                    self.airline_routes.loc[
+                                        (self.airline_routes["origin"] == origin_id)
+                                        and (self.airline_routes["destination"] == destination_id),
+                                        "aircraft_ids"
+                                    ].append(aircraft_id)
+                                    self.airline_routes.loc[
+                                        (self.airline_routes["origin"] == origin_id)
+                                        and (self.airline_routes["destination"] == destination_id),
+                                        "seat_flights_per_year"
+                                    ] += self.aircraft[-1].flights_per_year * self.aircraft[-1].seats
 
                     else:
                         break
