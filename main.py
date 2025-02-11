@@ -6,6 +6,7 @@ from route import Route
 from aircraft import Aircraft
 import random
 from tqdm import tqdm
+import pickle
 
 
 def main():
@@ -57,45 +58,87 @@ def main():
         fleet_data.sort_values(by="AircraftID", inplace=True)
         aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
-        # create classes
-        print("    Initialising cities...")
-        cities, city_lookup = City.initialise_cities(
-            city_data=city_data,
-            airport_data=airport_data,
-        )
+        # create classes or load from cache
+        if run_parameters["CacheOption"] not in ["load", "save", "none"]:
+            raise ValueError(f"Invalid CacheOption: {run_parameters['CacheOption']}")
+        initialised_from_cache = False
+        if run_parameters["CacheOption"] == "load":
+            # load from cache
+            cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
+            use_cache = input(f"    Loading initialisation data from {cache_folder_path}. Only continue if you trust data in this folder. Continue? (y/n): ").lower()
+            while use_cache not in ["y", "n"]:
+                use_cache = input("    Please enter 'y' or 'n': ").lower()
+            if use_cache == "y":
+                try:
+                    with open(os.path.join(cache_folder_path, "cities.pkl"), "rb") as f:
+                        cities = pickle.load(f)
+                    with open(os.path.join(cache_folder_path, "airlines.pkl"), "rb") as f:
+                        airlines = pickle.load(f)
+                    with open(os.path.join(cache_folder_path, "routes.pkl"), "rb") as f:
+                        routes = pickle.load(f)
+                    with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "rb") as f:
+                        city_lookup = pickle.load(f)
+                    initialised_from_cache = True
+                except FileNotFoundError:
+                    print("    Cache load failed. Reinitialising data...")
+            else:
+                print("    Cache load cancelled. Reinitialising data...")
 
-        print("    Initialising airlines...")
-        airlines = Airline.initialise_airlines(
-            fleet_data=fleet_data,
-            country_data=country_data,
-            run_parameters=run_parameters,
-        )
-
-        print("    Initialising routes...")
-        routes = Route.initialise_routes(
-            cities=cities,
-            city_pair_data=city_pair_data,
-            price_elasticities=price_elasticities,
-            income_elasticities=income_elasticities,
-            population_elasticity=run_parameters["PopulationElasticity"],
-        )
-
-        # initialise airline fleet assignment
-        for airline in tqdm(
-            airlines,
-            desc="        Fleet assignment",
-            ascii=False,
-            ncols=75,
-        ):
-            airline.initialise_fleet_assignment(
-                routes,
-                cities,
-                aircraft_data,
-                city_lookup,
-                randomGen,
-                run_parameters["StartYear"]
+        if not initialised_from_cache:
+            # initialise classes
+            print("    Initialising cities...")
+            cities, city_lookup = City.initialise_cities(
+                city_data=city_data,
+                airport_data=airport_data,
             )
 
+            print("    Initialising airlines...")
+            airlines = Airline.initialise_airlines(
+                fleet_data=fleet_data,
+                country_data=country_data,
+                run_parameters=run_parameters,
+            )
+
+            print("    Initialising routes...")
+            routes = Route.initialise_routes(
+                cities=cities,
+                city_pair_data=city_pair_data,
+                price_elasticities=price_elasticities,
+                income_elasticities=income_elasticities,
+                population_elasticity=run_parameters["PopulationElasticity"],
+            )
+
+            # initialise airline fleet assignment
+            for airline in tqdm(
+                airlines,
+                desc="        Fleet assignment",
+                ascii=False,
+                ncols=75,
+            ):
+                airline.initialise_fleet_assignment(
+                    routes,
+                    cities,
+                    aircraft_data,
+                    city_lookup,
+                    randomGen,
+                    run_parameters["StartYear"]
+                )
+
+            # save initialisation data to cache
+            if run_parameters["CacheOption"] == "save":
+                cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
+                print(f"    Saving initialisation data to {cache_folder_path}")
+                if not os.path.exists(cache_folder_path):
+                    os.makedirs(cache_folder_path)
+                with open(os.path.join(cache_folder_path, "cities.pkl"), "wb") as f:
+                    pickle.dump(cities, f)
+                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
+                    pickle.dump(airlines, f)
+                with open(os.path.join(cache_folder_path, "routes.pkl"), "wb") as f:
+                    pickle.dump(routes, f)
+                with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "wb") as f:
+                    pickle.dump(city_lookup, f)
+        
         # simulate base year
 
 
