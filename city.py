@@ -147,7 +147,7 @@ class City:
 
                     longest_runway_m = max(
                         longest_runway_m,
-                        float(airport_data.at[airport_row, "RunwayLength_m"]),
+                        float(airport_data.at[airport_row, "LongestRunway_m"]),
                     )
 
                     lat_sum += float(airport_data.at[airport_row, "Latitude"]) * float(

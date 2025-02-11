@@ -46,9 +46,9 @@ def main():
 
         # make adjustments to data format where relevant
         # change country code from 100+ to 0+ to allow for list indexing by code
-        airport_data["CountryCode"] = airport_data["CountryCode"] - 100
+        airport_data["Country"] = airport_data["Country"] - 100
         city_data["Country"] = city_data["Country"] - 100
-        country_data["CountryCode"] = country_data["CountryCode"] - 100
+        country_data["Number"] = country_data["Number"] - 100
         # calculate representative ranges for each aircraft type
         aircraft_data["TypicalRange_m"] = Aircraft.calc_ranges(aircraft_data, run_parameters["StartYear"])
 

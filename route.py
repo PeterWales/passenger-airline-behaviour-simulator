@@ -152,7 +152,7 @@ class Route:
                     price_elasticities["OD_1"]
                     == min(cities[origin_id].region, cities[destination_id].region)
                 )
-                and (
+                & (
                     price_elasticities["OD_2"]
                     == max(cities[origin_id].region, cities[destination_id].region)
                 )
