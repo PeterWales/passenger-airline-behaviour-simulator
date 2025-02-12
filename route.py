@@ -2,6 +2,7 @@ from city import City
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from pygeodesy import sphericalNvector as snv
 
 
 class Route:
@@ -42,6 +43,8 @@ class Route:
         Income elasticity of demand for the origin city
     destination_income_elasticity : float
         Income elasticity of demand for the destination city
+    seat_flights_per_year : int
+        Total number of seat flights per year on the route across all itineraries
 
     Methods
     -------
@@ -96,6 +99,7 @@ class Route:
         self.waypoints = None
         self.origin_income_elasticity = None
         self.destination_income_elasticity = None
+        self.seat_flights_per_year = 0
 
     @staticmethod
     def initialise_routes(
@@ -118,7 +122,7 @@ class Route:
 
         Returns
         -------
-        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID, DestinationCityID]
+        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID][DestinationCityID]
         """
         # order price_elasticities dataframe by OD_1 and OD_2
         price_elasticities = price_elasticities.sort_values(by=["OD_1", "OD_2"])
@@ -174,6 +178,73 @@ class Route:
 
             route_id += 1
         return routes
+
+
+    @staticmethod
+    def choose_fuel_stop(
+        routes: list,
+        cities: list,
+        origin: int,
+        destination: int,
+        range: float,
+        min_runway_m: float
+    ) -> int:
+        """
+        Choose a fuel stop city for a route based on range and runway length requirements.
+
+        Parameters
+        ----------
+        routes : list of instances of Route dataclass
+        cities : list of instances of City dataclass
+        origin : int
+            Origin city ID
+        destination : int
+            Destination city ID
+        range : float
+            Maximum range of the aircraft in meters
+        min_runway_m : float
+            Minimum runway length required for the aircraft in meters
+
+        Returns
+        -------
+        fuel_stop : int | None
+            City ID of the chosen fuel stop or None if no suitable city is found
+        """
+        # calculate the midpoint between the origin and destination
+        origin_coords = snv.LatLon(
+            routes[origin][destination].origin.latitude,
+            routes[origin][destination].origin.longitude
+        )
+
+        destination_coords = snv.LatLon(
+            routes[origin][destination].destination.latitude,
+            routes[origin][destination].destination.longitude
+        )
+
+        midpoint = origin_coords.midpointTo(destination_coords)
+
+        # find the nearest city to the midpoint that has a long enough runway
+        fuel_stop = None
+        min_distance = np.inf
+        for city in cities:
+            city_coords = snv.LatLon(
+                city.latitude,
+                city.longitude,
+            )
+            distance = midpoint.distanceTo(city_coords)
+            if (
+                distance < min_distance
+                and city.runway_length_m > min_runway_m
+            ):
+                # check that both legs are less than the range of the aircraft
+                if (
+                    origin_coords.distanceTo(city_coords) < range
+                    and city_coords.distanceTo(destination_coords) < range
+                ):
+                    fuel_stop = city.city_id
+                    min_distance = distance
+        return fuel_stop
+        
 
     def update_route(self) -> None:
         """
@@ -262,7 +333,7 @@ class Route:
         high_income = 14005
 
         # origin
-        if self.origin.country == 304:  # U.S. country code
+        if self.origin.country == 204:  # U.S. country code
             self.origin_income_elasticity = income_elasticities.loc[
                 income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
             ]
@@ -291,7 +362,7 @@ class Route:
             ]
 
         # destination
-        if self.destination.country == 304:  # U.S. country code
+        if self.destination.country == 204:  # U.S. country code
             self.destination_income_elasticity = income_elasticities.loc[
                 income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
             ]

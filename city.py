@@ -42,6 +42,8 @@ class City:
         Capacity-weighted time in minutes to get from landing to gate
     capacity_perhr : float
         Sum of maximum aircraft movements (takeoffs and landings) in any one hour for all airports in city
+    longest_runway_m : float
+        Length of longest runway in city in meters
 
     Methods
     -------
@@ -68,13 +70,18 @@ class City:
     taxi_out_mins: float
     taxi_in_mins: float
     capacity_perhr: float
+    longest_runway_m: float
 
     @staticmethod
-    def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> list:
+    def initialise_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> tuple[list, list]:
         """
         Generate list of instances of City dataclass from contents of CityData and AirportData files
-        List is indexed to match CityID field in CityData file
+        and a list of lists for looking up which cities are located in which countries.
+
+        cities list is indexed to match CityID field in CityData file
         If a certain index doesn't exist as a CityID in CityData, the corresponding list element is None
+        city_lookup list is indexed to match CountryID field in CountryData file, and contains lists of CityIDs
+        If a certain country doesn't contain any cities, the corresponding list element is empty
 
         Parameters
         ----------
@@ -85,6 +92,7 @@ class City:
         Returns
         -------
         cities : list of instances of City dataclass
+        city_lookup : list of lists
         """
         # check number of different aircraft supported by airport_data
         n_aircraft = 0
@@ -94,9 +102,13 @@ class City:
         ):
             n_aircraft += 1
 
-        # find CityID of last city in city_data
+        # initialise cities list
         last_city_id = city_data["CityID"].iloc[-1]
         cities = [None] * (last_city_id + 1)
+
+        # initialise city_lookup list
+        last_country_id = max(city_data["Country"])
+        city_lookup = [[] for _ in range(last_country_id + 1)]
 
         # loop over rows of city_data
         for city_id in range(last_city_id + 1):
@@ -110,6 +122,7 @@ class City:
 
             # calculate capacity-weighted mean of airport data
             capacity_sum = 0.0
+            longest_runway_m = 0.0
             lat_sum = 0.0
             long_sum = 0.0
             dom_fee_pax_sum = 0.0
@@ -130,6 +143,11 @@ class City:
 
                     capacity_sum += float(
                         airport_data.at[airport_row, "Capacity_movts_hr"]
+                    )
+
+                    longest_runway_m = max(
+                        longest_runway_m,
+                        float(airport_data.at[airport_row, "LongestRunway_m"]),
                     )
 
                     lat_sum += float(airport_data.at[airport_row, "Latitude"]) * float(
@@ -209,6 +227,8 @@ class City:
                 if city_longitude > 180.0:
                     city_longitude -= 360.0
 
+            city_lookup[city["Country"]].append(city_id)
+
             cities[city_id] = City(
                 city_id=city_id,
                 city_name=city["CityName"],
@@ -233,6 +253,7 @@ class City:
                 taxi_out_mins=taxi_out_sum / capacity_sum,
                 taxi_in_mins=taxi_in_sum / capacity_sum,
                 capacity_perhr=capacity_sum,
+                longest_runway_m=longest_runway_m,
             )
 
-        return cities
+        return cities, city_lookup
