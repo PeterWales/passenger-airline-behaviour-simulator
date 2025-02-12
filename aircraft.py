@@ -179,7 +179,6 @@ class Aircraft:
             )
         return ranges
 
-    @staticmethod
     def update_flights_per_year(self, routes: list) -> None:
         """
         Calculate the number of return flights per year the aircraft can fly on its specified route

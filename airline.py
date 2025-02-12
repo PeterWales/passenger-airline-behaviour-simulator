@@ -289,7 +289,7 @@ class Airline:
                                 # update airline-specific route dataframe
                                 not_route_exists = self.airline_routes[
                                     (self.airline_routes["origin"] == origin_id)
-                                    and (self.airline_routes["destination"] == destination_id)
+                                    & (self.airline_routes["destination"] == destination_id)
                                 ].empty
                                 if not_route_exists:
                                     self.airline_routes = self.airline_routes.append(
@@ -305,12 +305,12 @@ class Airline:
                                 else:
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        and (self.airline_routes["destination"] == destination_id),
+                                        & (self.airline_routes["destination"] == destination_id),
                                         "aircraft_ids"
                                     ].append(aircraft_id)
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        and (self.airline_routes["destination"] == destination_id),
+                                        & (self.airline_routes["destination"] == destination_id),
                                         "seat_flights_per_year"
                                     ] += self.aircraft[-1].flights_per_year * self.aircraft[-1].seats
 
@@ -374,7 +374,7 @@ class Airline:
                                 # update airline-specific route dataframe
                                 not_route_exists = self.airline_routes[
                                     (self.airline_routes["origin"] == origin_id)
-                                    and (self.airline_routes["destination"] == destination_id)
+                                    & (self.airline_routes["destination"] == destination_id)
                                 ].empty
                                 if not_route_exists:
                                     self.airline_routes = self.airline_routes.append(
@@ -390,12 +390,12 @@ class Airline:
                                 else:
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        and (self.airline_routes["destination"] == destination_id),
+                                        & (self.airline_routes["destination"] == destination_id),
                                         "aircraft_ids"
                                     ].append(aircraft_id)
                                     self.airline_routes.loc[
                                         (self.airline_routes["origin"] == origin_id)
-                                        and (self.airline_routes["destination"] == destination_id),
+                                        & (self.airline_routes["destination"] == destination_id),
                                         "seat_flights_per_year"
                                     ] += self.aircraft[-1].flights_per_year * self.aircraft[-1].seats
 
