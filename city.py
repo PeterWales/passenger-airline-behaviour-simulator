@@ -7,8 +7,32 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     Incorporate parts of airport_data into city_data DataFrame so that cities can be treated as single entities.
     Generate a list of lists for looking up which cities are located in which countries.
 
-    cities list is indexed to match CityID field in CityData file
-    If a certain index doesn't exist as a CityID in CityData, the corresponding list element is None
+    city_data DataFrame is edited in-place to add the following columns:
+        Population : int
+            Population of the city in the current year
+        Income_USDpercap : float
+            Income per capita in the current year
+        Latitude : float
+            Capacity-weighted mean latitude of all airports in the city
+        Longitude : float
+            Capacity-weighted mean longitude of all airports in the city
+        Domestic_Fees_USDperPax : float
+            Capacity-weighted mean of domestic landing fees per passenger
+        Domestic_Fees_USDperMovt : list[float]
+            Capacity-weighted mean of domestic landing fees per landing for each aircraft size
+        International_Fees_USDperPax : float
+            Capacity-weighted mean of international landing fees per passenger
+        International_Fees_USDperMovt : list[float]
+            Capacity-weighted mean of international landing fees per landing for each aircraft size
+        Taxi_Out_mins : float
+            Capacity-weighted mean of unimpeded taxi-out time in minutes
+        Taxi_In_mins : float
+            Capacity-weighted mean of unimpeded taxi-in time in minutes
+        Capacity_MovtsPerHr : float
+            Total capacity of all airports in the city in movements per hour (takeoffs + landings)
+        LongestRunway_m : float
+            Length of the longest runway in the city
+
     city_lookup list is indexed to match CountryID field in CountryData file, and contains lists of CityIDs
     If a certain country doesn't contain any cities, the corresponding list element is empty
 
@@ -34,10 +58,12 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     if n_aircraft == 0:
         raise ValueError("No aircraft-specific data found in airport_data")
 
+    # create index for faster lookups
+    airport_data.set_index("AirportID", inplace=True)
+
     # initialise lists
     last_country_id = max(city_data["Country"])
     city_lookup = [[] for _ in range(last_country_id + 1)]
-    capacity = []
     latitude = []
     longitude = []
     domestic_fees_USDperpax = []
@@ -68,9 +94,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
             airport_id = int(city[f"Airport_{airport_column}"])
 
             if not (airport_id == 0):
-                airport_row = airport_data.index[
-                    airport_data["AirportID"] == airport_id
-                ].tolist()[0]
+                airport_row = airport_data.loc[airport_id]
 
                 capacity_sum += float(
                     airport_data.at[airport_row, "Capacity_movts_hr"]
@@ -151,6 +175,9 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                 break
             airport_column += 1
 
+        if capacity_sum == 0.0:
+            raise ValueError("City has no airport capacity")
+
         city_longitude = long_sum / capacity_sum
         if long_flag:
             if city_longitude < -180.0:
@@ -160,7 +187,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
         city_lookup[city["Country"]].append(city["CityID"])
 
-        capacity.append(capacity_sum)
         latitude.append(lat_sum / capacity_sum)
         longitude.append(city_longitude)
         domestic_fees_USDperpax.append(dom_fee_pax_sum / capacity_sum)
@@ -177,10 +203,8 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
         longest_runway_m.append(longest_runway_found)
 
     # add new columns to city_data
-
     city_data["Population"] = city_data["BaseYearPopulation"]
     city_data["Income_USDpercap"] = city_data["BaseYearIncome"]
-    city_data["Capacity_MovtsPerHr"] = capacity
     city_data["Latitude"] = latitude
     city_data["Longitude"] = longitude
     city_data["Domestic_Fees_USDperPax"] = domestic_fees_USDperpax
@@ -189,7 +213,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     city_data["International_Fees_USDperMovt"] = international_fees_USDpermvmt
     city_data["Taxi_Out_mins"] = taxi_out_mins
     city_data["Taxi_In_mins"] = taxi_in_mins
-    city_data["Capacity_PerHr"] = capacity_perhr
+    city_data["Capacity_MovtsPerHr"] = capacity_perhr
     city_data["LongestRunway_m"] = longest_runway_m
 
     return city_data, city_lookup

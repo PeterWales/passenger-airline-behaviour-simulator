@@ -55,6 +55,7 @@ def main():
 
         # sort data where relevant
         city_data.sort_values(by="CityID", inplace=True)
+        airport_data.sort_values(by="AirportID", inplace=True)
         fleet_data.sort_values(by="AircraftID", inplace=True)
         aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
