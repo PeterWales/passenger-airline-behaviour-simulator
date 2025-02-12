@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from city import City
+import city
 from airline import Airline
 from route import Route
 from aircraft import Aircraft
@@ -87,9 +87,8 @@ def main():
         if not initialised_from_cache:
             # initialise classes
             print("    Initialising cities...")
-            cities, city_lookup = City.initialise_cities(
-                city_data=city_data,
-                airport_data=airport_data,
+            city_data, city_lookup = city.add_airports_to_cities(
+                city_data, airport_data
             )
 
             print("    Initialising airlines...")
