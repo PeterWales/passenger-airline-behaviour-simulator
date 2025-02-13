@@ -34,6 +34,10 @@ def main():
         # import cached data if relevant
         if run_parameters["CacheOption"] not in ["load", "save", "none"]:
             raise ValueError(f"Invalid CacheOption: {run_parameters['CacheOption']}")
+        if run_parameters["CacheOption"] in ["load", "save"]:
+            cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
+            if not os.path.exists(cache_folder_path):
+                os.makedirs(cache_folder_path)
         city_data_cache = False
         city_lookup_cache = False
         airlines_cache = False
@@ -42,7 +46,6 @@ def main():
         airline_routes_cache = False
         if run_parameters["CacheOption"] == "load":
             # load from cache
-            cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
             use_cache = input(f"    Loading initialisation data from {cache_folder_path}. Only continue if you trust data in this folder. Continue? (y/n): ").lower()
             while use_cache not in ["y", "n"]:
                 use_cache = input("    Please enter 'y' or 'n': ").lower()
@@ -135,6 +138,8 @@ def main():
                 country_data,
                 run_parameters,
             )
+            with open(os.path.join(cache_folder_path, "airlines_line138.pkl"), "wb") as f:
+                    pickle.dump(airlines, f)
 
         if not city_pair_data_cache:
             print("    Initialising routes...")
@@ -145,6 +150,8 @@ def main():
                 income_elasticities,
                 run_parameters["PopulationElasticity"],
             )
+            with open(os.path.join(cache_folder_path, "city_pair_data_line150.pkl"), "wb") as f:
+                    pickle.dump(city_pair_data, f)
 
         # initialise airline fleet assignment
         airline_fleets, airline_routes, airlines, city_pair_data = (
