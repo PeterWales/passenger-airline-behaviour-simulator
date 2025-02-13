@@ -53,6 +53,7 @@ def initialise_routes(
     price_elasticity_national = np.full(n, fill_value=0, dtype=np.float32)
     origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
     destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
+    seat_flights_per_year = np.zeros(n, dtype=np.int32)
 
     # show a progress bar because this step can take a while
     for idx, route in tqdm(
@@ -124,6 +125,7 @@ def initialise_routes(
     city_pair_data['Price_Elasticity'] = price_elasticity_national.astype('float32')
     city_pair_data['Origin_Income_Elasticity'] = origin_income_elasticity.astype('float32')
     city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
+    city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
 
     # remove flagged routes
     city_pair_data.drop(remove_idx, inplace=True)
@@ -341,69 +343,61 @@ def calc_static_demand_factor(
     return income_factor * population_factor
 
 
-# def choose_fuel_stop(
-#     routes: list,
-#     cities: list,
-#     origin: int,
-#     destination: int,
-#     range: float,
-#     min_runway_m: float
-# ) -> int:
-#     """
-#     Choose a fuel stop city for a route based on range and runway length requirements.
+def choose_fuel_stop(
+    city_data: pd.DataFrame,
+    origin: pd.Series,
+    destination: pd.Series,
+    aircraft_range: float,
+    min_runway_m: float
+) -> int:
+    """
+    Choose a fuel stop city for a route based on range and runway length requirements.
 
-#     Parameters
-#     ----------
-#     routes : list of instances of Route dataclass
-#     cities : list of instances of City dataclass
-#     origin : int
-#         Origin city ID
-#     destination : int
-#         Destination city ID
-#     range : float
-#         Maximum range of the aircraft in meters
-#     min_runway_m : float
-#         Minimum runway length required for the aircraft in meters
+    Parameters
+    ----------
+    city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    origin : pd.Series
+    destination : pd.Series
+    aircraft_range : float
+    min_runway_m : float
 
-#     Returns
-#     -------
-#     fuel_stop : int | None
-#         City ID of the chosen fuel stop or None if no suitable city is found
-#     """
-#     # calculate the midpoint between the origin and destination
-#     origin_coords = snv.LatLon(
-#         routes[origin][destination].origin.latitude,
-#         routes[origin][destination].origin.longitude
-#     )
+    Returns
+    -------
+    fuel_stop : int | None
+        City ID of the chosen fuel stop or None if no suitable city is found
+    """
+    # calculate the midpoint between the origin and destination
+    origin_coords = snv.LatLon(
+        origin["Latitude"],
+        origin["Longitude"]
+    )
+    destination_coords = snv.LatLon(
+        destination["Latitude"],
+        destination["Longitude"]
+    )
 
-#     destination_coords = snv.LatLon(
-#         routes[origin][destination].destination.latitude,
-#         routes[origin][destination].destination.longitude
-#     )
+    midpoint = origin_coords.midpointTo(destination_coords)
 
-#     midpoint = origin_coords.midpointTo(destination_coords)
-
-#     # find the nearest city to the midpoint that has a long enough runway
-#     fuel_stop = None
-#     min_distance = np.inf
-#     for city in cities:
-#         city_coords = snv.LatLon(
-#             city.latitude,
-#             city.longitude,
-#         )
-#         distance = midpoint.distanceTo(city_coords)
-#         if (
-#             distance < min_distance
-#             and city.runway_length_m > min_runway_m
-#         ):
-#             # check that both legs are less than the range of the aircraft
-#             if (
-#                 origin_coords.distanceTo(city_coords) < range
-#                 and city_coords.distanceTo(destination_coords) < range
-#             ):
-#                 fuel_stop = city.city_id
-#                 min_distance = distance
-#     return fuel_stop
+    # find the nearest city to the midpoint that has a long enough runway
+    fuel_stop = None
+    min_distance = np.inf
+    for _, city in city_data.iterrows():
+        city_coords = snv.LatLon(
+            city["Latitude"],
+            city["Longitude"],
+        )
+        distance = midpoint.distanceTo(city_coords)
+        if distance < min_distance:
+            # check that runway and leg distances are suitable for the aircraft
+            if (
+                city["LongestRunway_m"] > min_runway_m
+                and origin_coords.distanceTo(city_coords) < aircraft_range
+                and city_coords.distanceTo(destination_coords) < aircraft_range
+            ):
+                fuel_stop = city["CityID"]
+                min_distance = distance
+    return fuel_stop
 
 
 # def update_demand(self) -> None:
