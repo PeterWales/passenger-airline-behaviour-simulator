@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 import city
+import route
 from airline import Airline
-from route import Route
 from aircraft import Aircraft
 import random
 from tqdm import tqdm
@@ -92,20 +92,20 @@ def main():
                 city_data, airport_data
             )
 
+            print("    Initialising routes...")
+            city_pair_data = route.initialise_routes(
+                city_data,
+                city_pair_data,
+                price_elasticities,
+                income_elasticities,
+                run_parameters["PopulationElasticity"],
+            )
+
             print("    Initialising airlines...")
             airlines = Airline.initialise_airlines(
                 fleet_data=fleet_data,
                 country_data=country_data,
                 run_parameters=run_parameters,
-            )
-
-            print("    Initialising routes...")
-            routes = Route.initialise_routes(
-                cities=cities,
-                city_pair_data=city_pair_data,
-                price_elasticities=price_elasticities,
-                income_elasticities=income_elasticities,
-                population_elasticity=run_parameters["PopulationElasticity"],
             )
 
             # initialise airline fleet assignment
