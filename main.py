@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import city
 import route
-from airline import Airline
+import airline
 from aircraft import Aircraft
 import random
 from tqdm import tqdm
@@ -86,10 +86,17 @@ def main():
                 print("    Cache load cancelled. Reinitialising data...")
 
         if not initialised_from_cache:
-            # initialise classes
+            # initialise DataFrames
             print("    Initialising cities...")
             city_data, city_lookup = city.add_airports_to_cities(
                 city_data, airport_data
+            )
+
+            print("    Initialising airlines...")
+            airlines = airline.initialise_airlines(
+                fleet_data,
+                country_data,
+                run_parameters,
             )
 
             print("    Initialising routes...")
@@ -99,13 +106,6 @@ def main():
                 price_elasticities,
                 income_elasticities,
                 run_parameters["PopulationElasticity"],
-            )
-
-            print("    Initialising airlines...")
-            airlines = Airline.initialise_airlines(
-                fleet_data=fleet_data,
-                country_data=country_data,
-                run_parameters=run_parameters,
             )
 
             # initialise airline fleet assignment
