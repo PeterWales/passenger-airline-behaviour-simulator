@@ -65,14 +65,14 @@ def calc_flights_per_year(
     destination: pd.Series,
     aircraft: pd.Series,
     city_pair_data: pd.DataFrame,
-    fuel_stop: None | pd.Series,
+    fuel_stop_series: None | pd.Series,
 ) -> int:
     """
     Calculate the number of return flights per year the aircraft can fly on its specified route
 
     Parameters
     ----------
-    fuel_stop : None | pd.Series
+    fuel_stop_series : None | pd.Series
         Series of data for city where aircraft must stop to refuel, or None if non-stop
     origin : pd.Series
         Series of data for origin city
@@ -89,10 +89,10 @@ def calc_flights_per_year(
     """
     curfew_time = 7  # assume airports are closed between 11pm and 6am
 
-    if fuel_stop is None:
+    if fuel_stop_series is None:
         outbound_route = city_pair_data.loc[
-            (city_pair_data["Origin"] == origin["CityID"])
-            & (city_pair_data["Destination"] == destination["CityID"])
+            (city_pair_data["OriginCityID"] == origin["CityID"])
+            & (city_pair_data["DestinationCityID"] == destination["CityID"])
         ].iloc[0]
 
         flight_time_hrs = outbound_route["Great_Circle_Distance_m"] / (aircraft["CruiseV_ms"] * 3600)
@@ -100,10 +100,12 @@ def calc_flights_per_year(
             flight_time_hrs + aircraft["Turnaround_hrs"]
             + (
                 sum(
-                    origin["Taxi_Out_mins"],
-                    destination["Taxi_In_mins"],
-                    destination["Taxi_Out_mins"],
-                    origin["Taxi_In_mins"],
+                    [
+                        origin["Taxi_Out_mins"],
+                        destination["Taxi_In_mins"],
+                        destination["Taxi_Out_mins"],
+                        origin["Taxi_In_mins"],
+                    ]
                 ) / (60 * 2)
             )
         )
@@ -116,12 +118,12 @@ def calc_flights_per_year(
             legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
     else:
         outbound_leg1 = city_pair_data.loc[
-            (city_pair_data["Origin"] == origin["CityID"])
-            & (city_pair_data["Destination"] == fuel_stop["CityID"])
+            (city_pair_data["OriginCityID"] == origin["CityID"])
+            & (city_pair_data["DestinationCityID"] == fuel_stop_series["CityID"])
         ].iloc[0]
         outbound_leg2 = city_pair_data.loc[
-            (city_pair_data["Origin"] == fuel_stop["CityID"])
-            & (city_pair_data["Destination"] == destination["CityID"])
+            (city_pair_data["OriginCityID"] == fuel_stop_series["CityID"])
+            & (city_pair_data["DestinationCityID"] == destination["CityID"])
         ].iloc[0]
 
         flight_time_1_hrs = (
@@ -135,12 +137,14 @@ def calc_flights_per_year(
             flight_time_1_hrs + flight_time_2_hrs + 2*aircraft["Turnaround_hrs"]
             + (
                 sum(
-                    origin["Taxi_Out_mins"],
-                    destination["Taxi_In_mins"],
-                    destination["Taxi_Out_mins"],
-                    origin["Taxi_In_mins"],
-                    2*fuel_stop["Taxi_In_mins"],
-                    2*fuel_stop["Taxi_Out_mins"],
+                    [
+                        origin["Taxi_Out_mins"],
+                        destination["Taxi_In_mins"],
+                        destination["Taxi_Out_mins"],
+                        origin["Taxi_In_mins"],
+                        2*fuel_stop_series["Taxi_In_mins"],
+                        2*fuel_stop_series["Taxi_Out_mins"],
+                    ]
                 ) / (60 * 2)
             )
         )

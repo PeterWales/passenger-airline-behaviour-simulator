@@ -5,7 +5,6 @@ import route
 import airline
 import aircraft
 import random
-from tqdm import tqdm
 import pickle
 
 
@@ -119,8 +118,6 @@ def main():
             city_data["Country"] = city_data["Country"] - 100
             city_data.sort_values(by="CityID", inplace=True)
 
-            city_pair_data = pd.read_csv(os.path.join(data_path, "DataByCityPair.csv"))
-
             print("    Initialising cities...")
             city_data, city_lookup = city.add_airports_to_cities(
                 city_data, airport_data
@@ -138,11 +135,13 @@ def main():
                 country_data,
                 run_parameters,
             )
-            with open(os.path.join(cache_folder_path, "airlines_line138.pkl"), "wb") as f:
+            if run_parameters["CacheOption"] == "save":
+                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
                     pickle.dump(airlines, f)
 
         if not city_pair_data_cache:
             print("    Initialising routes...")
+            city_pair_data = pd.read_csv(os.path.join(data_path, "DataByCityPair.csv"))
             city_pair_data = route.initialise_routes(
                 city_data,
                 city_pair_data,
@@ -150,26 +149,27 @@ def main():
                 income_elasticities,
                 run_parameters["PopulationElasticity"],
             )
-            with open(os.path.join(cache_folder_path, "city_pair_data_line150.pkl"), "wb") as f:
-                    pickle.dump(city_pair_data, f)
 
-        # initialise airline fleet assignment
-        airline_fleets, airline_routes, airlines, city_pair_data = (
-            airline.initialise_fleet_assignment(
-                airlines,
-                city_pair_data,
-                city_data,
-                aircraft_data,
-                city_lookup,
-                randomGen,
-                run_parameters["StartYear"]
+        if (
+            not airline_fleets_cache
+            or not airline_routes_cache
+            or not city_pair_data_cache
+        ):
+            print("    Initialising fleet assignment...")
+            airline_fleets, airline_routes, city_pair_data = (
+                airline.initialise_fleet_assignment(
+                    airlines,
+                    city_pair_data,
+                    city_data,
+                    aircraft_data,
+                    city_lookup,
+                    randomGen,
+                    run_parameters["StartYear"]
+                )
             )
-        )
         if run_parameters["CacheOption"] == "save":
             with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
                 pickle.dump(city_pair_data, f)
-            with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
-                pickle.dump(airlines, f)
             with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "wb") as f:
                 pickle.dump(airline_fleets, f)
             with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
