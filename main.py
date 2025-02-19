@@ -106,6 +106,9 @@ def main():
 
         price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
         income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
+        # import DemandCoefficients.csv as dict where first row is keys and second row is values
+        with open(os.path.join(data_path, "DemandCoefficients.csv"), "r", encoding='utf-8-sig') as f:
+            demand_coefficients = dict(zip(f.readline().strip().split(","), map(float, f.readline().strip().split(","))))
         
         fleet_data = pd.read_csv(
             os.path.join(data_path, "FleetDataPassenger.csv")
@@ -164,7 +167,8 @@ def main():
                     aircraft_data,
                     city_lookup,
                     randomGen,
-                    run_parameters["StartYear"]
+                    run_parameters["StartYear"],
+                    demand_coefficients,
                 )
             )
         if run_parameters["CacheOption"] == "save":

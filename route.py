@@ -49,6 +49,7 @@ def initialise_routes(
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
     city_pair_data["seat_flights_per_year"] = 0
+    city_pair_data["exp_utility_sum"] = 0
 
     # initialise lists using 32-bit data types where possible for memory efficiency
     n = len(city_pair_data)
@@ -404,19 +405,3 @@ def choose_fuel_stop(
                 fuel_stop = city_id
                 min_distance = distance
     return fuel_stop
-
-
-# def update_demand(self) -> None:
-#     """
-#     Update the route demand based on fare and annual static factors.
-
-#     Updates self.current_demand.
-#     """
-#     # TODO: add input for national taxes
-#     fare_factor = 1 + (
-#         ((self.mean_fare - self.base_mean_fare) / self.base_mean_fare)
-#         * self.price_elasticities["route"]
-#     )
-#     # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
-
-#     self.current_demand = self.base_demand * fare_factor * self.static_demand_factor

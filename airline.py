@@ -3,6 +3,7 @@ import numpy as np
 import route
 from tqdm import tqdm
 import aircraft as acft
+import demand
 
 
 def initialise_airlines(
@@ -127,6 +128,7 @@ def initialise_fleet_assignment(
     city_lookup: list,
     randomGen: np.random.Generator,
     year: int,
+    demand_coefficients: dict[str, float],
 ) -> pd.DataFrame:
     """
     Assign aircraft to routes based on base demand, aircraft range and runway required
@@ -173,6 +175,7 @@ def initialise_fleet_assignment(
             "aircraft_ids": pd.Series(dtype="object"),
             "flights_per_year": pd.Series(dtype="int"),
             "seat_flights_per_year": pd.Series(dtype="int"),
+            "exp_utility": pd.Series(dtype="float"),
         }
     ) for _ in range(n_airlines)]
 
@@ -329,6 +332,7 @@ def initialise_fleet_assignment(
                                     airline_id,
                                     outbound_route,
                                     inbound_route,
+                                    demand_coefficients,
                                 )
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
@@ -391,6 +395,7 @@ def initialise_fleet_assignment(
                                         airline_id,
                                         outbound_route,
                                         inbound_route,
+                                        demand_coefficients,
                                     )
 
                         else:
@@ -437,6 +442,7 @@ def create_aircraft(
     airline_id: int,
     outbound_route: pd.Series,
     inbound_route: pd.Series,
+    demand_coefficients: dict[str, float],
 ):
     aircraft_id_list.append(aircraft_id)
     aircraft_size_list.append(aircraft_size)
@@ -465,9 +471,26 @@ def create_aircraft(
         )
     )
 
-    # update outbound and return route in-place in city_pair_data DataFrame
     seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
+    flight_time_hrs = (
+        outbound_route["Great_Circle_Distance_m"] / (aircraft["CruiseV_ms"] * 3600)
+    )  # could make this more accurate by taking average of different aircraft rather than just the last one
+    outbound_exp_utility = demand.calc_exp_utility(
+        demand_coefficients,
+        outbound_route["Fare_Est"],
+        flight_time_hrs,
+        airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] + flights_per_year_list[-1],
+        fuel_stop,
+    )
+    inbound_exp_utility = demand.calc_exp_utility(
+        demand_coefficients,
+        inbound_route["Fare_Est"],
+        flight_time_hrs,
+        airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] + flights_per_year_list[-1],
+        fuel_stop,
+    )
 
+    # update outbound and return route in-place in city_pair_data DataFrame
     city_pair_data.loc[
         (city_pair_data["OriginCityID"] == origin_id)
         & (city_pair_data["DestinationCityID"] == destination_id),
@@ -478,6 +501,16 @@ def create_aircraft(
         & (city_pair_data["DestinationCityID"] == origin_id),
         "seat_flights_per_year"
     ] += seat_flights_per_year
+    city_pair_data.loc[
+        (city_pair_data["OriginCityID"] == origin_id)
+        & (city_pair_data["DestinationCityID"] == destination_id),
+        "exp_utility_sum"
+    ] += outbound_exp_utility
+    city_pair_data.loc[
+        (city_pair_data["OriginCityID"] == destination_id)
+        & (city_pair_data["DestinationCityID"] == origin_id),
+        "exp_utility_sum"
+    ] += inbound_exp_utility
 
     # update airline-specific route dataframe
     not_route_exists = airline_routes[airline_id][
@@ -491,7 +524,8 @@ def create_aircraft(
             "fare": [outbound_route["Fare_Est"]],
             "aircraft_ids": [[aircraft_id]],
             "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year]
+            "seat_flights_per_year": [seat_flights_per_year],
+            "exp_utility": [outbound_exp_utility]
         }
         new_df_1 = pd.DataFrame(airline_routes_newrow_1)
         airline_routes_newrow_2 = {
@@ -500,7 +534,8 @@ def create_aircraft(
             "fare": [inbound_route["Fare_Est"]],
             "aircraft_ids": [[aircraft_id]],
             "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year]
+            "seat_flights_per_year": [seat_flights_per_year],
+            "exp_utility": [inbound_exp_utility]
         }
         new_df_2 = pd.DataFrame(airline_routes_newrow_2)
         airline_routes[airline_id] = pd.concat([
@@ -526,6 +561,9 @@ def create_aircraft(
 
         airline_routes[airline_id].loc[outbound_mask, "seat_flights_per_year"] += seat_flights_per_year
         airline_routes[airline_id].loc[inbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+
+        airline_routes[airline_id].loc[outbound_mask, "exp_utility"] = outbound_exp_utility
+        airline_routes[airline_id].loc[inbound_mask, "exp_utility"] = inbound_exp_utility
 
     return (
         aircraft_id_list,
