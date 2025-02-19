@@ -62,26 +62,33 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
 
 def calc_flights_per_year(
     origin: pd.Series,
+    origin_id: int,
     destination: pd.Series,
+    destination_id: int,
     aircraft: pd.Series,
     city_pair_data: pd.DataFrame,
     fuel_stop_series: None | pd.Series,
+    fuel_stop_id: None | int
 ) -> int:
     """
     Calculate the number of return flights per year the aircraft can fly on its specified route
 
     Parameters
     ----------
-    fuel_stop_series : None | pd.Series
-        Series of data for city where aircraft must stop to refuel, or None if non-stop
     origin : pd.Series
         Series of data for origin city
+    origin_id : int
     destination : pd.Series
         Series of data for destination city
+    destination_id : int
     aircraft : pd.Series
         Series of data for aircraft
     city_pair_data : pd.DataFrame
         DataFrame of data for each city pair
+    fuel_stop_series : None | pd.Series
+        Series of data for city where aircraft must stop to refuel, or None if non-stop
+    fuel_stop_id : int
+        ID of city where aircraft must stop to refuel
 
     Returns
     -------
@@ -91,8 +98,8 @@ def calc_flights_per_year(
 
     if fuel_stop_series is None:
         outbound_route = city_pair_data.loc[
-            (city_pair_data["OriginCityID"] == origin["CityID"])
-            & (city_pair_data["DestinationCityID"] == destination["CityID"])
+            (city_pair_data["OriginCityID"] == origin_id)
+            & (city_pair_data["DestinationCityID"] == destination_id)
         ].iloc[0]
 
         flight_time_hrs = outbound_route["Great_Circle_Distance_m"] / (aircraft["CruiseV_ms"] * 3600)
@@ -118,12 +125,12 @@ def calc_flights_per_year(
             legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
     else:
         outbound_leg1 = city_pair_data.loc[
-            (city_pair_data["OriginCityID"] == origin["CityID"])
-            & (city_pair_data["DestinationCityID"] == fuel_stop_series["CityID"])
+            (city_pair_data["OriginCityID"] == origin_id)
+            & (city_pair_data["DestinationCityID"] == fuel_stop_id)
         ].iloc[0]
         outbound_leg2 = city_pair_data.loc[
-            (city_pair_data["OriginCityID"] == fuel_stop_series["CityID"])
-            & (city_pair_data["DestinationCityID"] == destination["CityID"])
+            (city_pair_data["OriginCityID"] == fuel_stop_id)
+            & (city_pair_data["DestinationCityID"] == destination_id)
         ].iloc[0]
 
         flight_time_1_hrs = (

@@ -387,7 +387,7 @@ def choose_fuel_stop(
     # find the nearest city to the midpoint that has a long enough runway
     fuel_stop = None
     min_distance = np.inf
-    for _, city in city_data.iterrows():
+    for city_id, city in city_data.iterrows():
         city_coords = snv.LatLon(
             city["Latitude"],
             city["Longitude"],
@@ -400,7 +400,7 @@ def choose_fuel_stop(
                 and origin_coords.distanceTo(city_coords) < aircraft_range
                 and city_coords.distanceTo(destination_coords) < aircraft_range
             ):
-                fuel_stop = city["CityID"]
+                fuel_stop = city_id
                 min_distance = distance
     return fuel_stop
 
