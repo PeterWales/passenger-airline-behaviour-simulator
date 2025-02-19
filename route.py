@@ -48,6 +48,7 @@ def initialise_routes(
     # initialise whole columns
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
+    city_pair_data["seat_flights_per_year"] = 0
 
     # initialise lists using 32-bit data types where possible for memory efficiency
     n = len(city_pair_data)
