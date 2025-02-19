@@ -27,7 +27,7 @@ def main():
         if not os.path.exists(save_folder_path):
             os.makedirs(save_folder_path)
         savepath = os.path.join(
-            save_folder_path, f"output_{run_parameters["RunID"]}.csv"
+            save_folder_path, f"output_{run_parameters['RunID']}.csv"
         )
 
         # import cached data if relevant

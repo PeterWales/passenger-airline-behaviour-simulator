@@ -48,8 +48,6 @@ def initialise_airlines(
     country_name = []
     country_id = []
     aircraft_lists = []
-    aircraft = []
-    airline_routes = []
 
     for region, codes in census_regions.items():
         # calculate GDP proportions
@@ -117,8 +115,6 @@ def initialise_airlines(
     airlines["Country"] = country_name
     airlines["CountryID"] = country_id
     airlines["n_Aircraft"] = aircraft_lists
-    airlines["Aircraft"] = aircraft
-    airlines["Airline_Routes"] = airline_routes
 
     return airlines
 
@@ -175,6 +171,7 @@ def initialise_fleet_assignment(
             "destination",
             "fare",
             "aircraft_ids",
+            "flights_per_year",
             "seat_flights_per_year",
         ]
     ) for _ in range(n_airlines)]
@@ -243,13 +240,13 @@ def initialise_fleet_assignment(
 
         aircraft_id_list = []
         aircraft_size_list = []
-        aircraft_age = []
-        current_lease = []
-        breguet_factor = []
+        aircraft_age_list = []
+        current_lease_list = []
+        breguet_factor_list = []
         origin_id_list = []
         destination_id_list = []
         fuel_stop_list = []
-        flights_per_year = []
+        flights_per_year_list = []
 
         # assign aircraft seat capacity by base demand starting with the largest aircraft on the longest routes
         distances.sort(key=lambda x: x[2], reverse=True)
@@ -295,76 +292,40 @@ def initialise_fleet_assignment(
                                 # create aircraft and assign to route, randomise age
                                 aircraft_id += 1
 
-                                aircraft_id_list.append(aircraft_id)
-                                aircraft_size_list.append(aircraft_size)
-                                aircraft_age.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
-                                current_lease.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age[-1]))
-                                breguet_factor.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
-                                origin_id_list.append(origin_id)
-                                destination_id_list.append(destination_id)
-                                fuel_stop_list.append(None)
-
-                                flights_per_year.append(
-                                    acft.calc_flights_per_year(
-                                        city_data.loc[origin_id],
-                                        city_data.loc[destination_id],
-                                        aircraft,
-                                        city_pair_data,
-                                        fuel_stop_series=None,
-                                    )
+                                (
+                                    aircraft_id_list,
+                                    aircraft_size_list,
+                                    aircraft_age_list,
+                                    current_lease_list,
+                                    breguet_factor_list,
+                                    origin_id_list,
+                                    destination_id_list,
+                                    fuel_stop_list,
+                                    flights_per_year_list,
+                                    city_pair_data,
+                                    airline_routes,
+                                ) = create_aircraft(
+                                    aircraft_id_list,
+                                    aircraft_id_list,
+                                    aircraft_size_list,
+                                    aircraft_size_list,
+                                    aircraft_age_list,
+                                    randomGen,
+                                    aircraft,
+                                    current_lease_list,
+                                    breguet_factor_list,
+                                    year,
+                                    origin_id,
+                                    destination_id,
+                                    fuel_stop,
+                                    flights_per_year_list,
+                                    city_data,
+                                    city_pair_data,
+                                    airline_routes,
+                                    airline_id,
+                                    outbound_route,
+                                    inbound_route,
                                 )
-
-                                # update outbound and return route in-place in city_pair_data DataFrame
-                                city_pair_data.loc[
-                                    (city_pair_data["OriginCityID"] == origin_id)
-                                    & (city_pair_data["DestinationCityID"] == destination_id),
-                                    "Seat_Flights_perYear"
-                                ] += flights_per_year[-1] * aircraft["Seats"]
-                                city_pair_data.loc[
-                                    (city_pair_data["OriginCityID"] == destination_id)
-                                    & (city_pair_data["DestinationCityID"] == origin_id),
-                                    "Seat_Flights_perYear"
-                                ] += flights_per_year[-1] * aircraft["Seats"]
-
-                                # update airline-specific route dataframe
-                                not_route_exists = airline_routes[airline_id][
-                                    (airline_routes[airline_id]["origin"] == origin_id)
-                                    & (airline_routes[airline_id]["destination"] == destination_id)
-                                ].empty
-                                if not_route_exists:
-                                    seat_flights_per_year = flights_per_year[-1] * aircraft["Seats"]
-                                    airline_routes_newrow_1 = {
-                                        "origin": origin_id,
-                                        "destination": destination_id,
-                                        "fare": outbound_route["Fare_Est"],
-                                        "aircraft_ids": [aircraft_id],
-                                        "seat_flights_per_year": seat_flights_per_year
-                                    }
-                                    new_df_1 = pd.DataFrame(airline_routes_newrow_1)
-                                    airline_routes_newrow_2 = {
-                                        "origin": destination_id,
-                                        "destination": origin_id,
-                                        "fare": inbound_route["Fare_Est"],
-                                        "aircraft_ids": [aircraft_id],
-                                        "seat_flights_per_year": seat_flights_per_year
-                                    }
-                                    new_df_2 = pd.DataFrame(airline_routes_newrow_2)
-                                    airline_routes[airline_id] = pd.concat([
-                                        airline_routes[airline_id], 
-                                        new_df_1,
-                                        new_df_2
-                                    ], ignore_index=True)
-                                else:
-                                    airline_routes[airline_id].loc[
-                                        (airline_routes[airline_id]["origin"] == origin_id)
-                                        & (airline_routes[airline_id]["destination"] == destination_id),
-                                        "aircraft_ids"
-                                    ].append(aircraft_id)
-                                    airline_routes[airline_id].loc[
-                                        (airline_routes[airline_id]["origin"] == origin_id)
-                                        & (airline_routes[airline_id]["destination"] == destination_id),
-                                        "seat_flights_per_year"
-                                    ] += flights_per_year[-1] * aircraft["Seats"]
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
                             # aircraft doesn't have enough range - try with a fuel stop
@@ -390,76 +351,40 @@ def initialise_fleet_assignment(
                                     # create aircraft instance and assign to route, randomise age
                                     aircraft_id += 1
 
-                                    aircraft_id_list.append(aircraft_id)
-                                    aircraft_size_list.append(aircraft_size)
-                                    aircraft_age.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
-                                    current_lease.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age[-1]))
-                                    breguet_factor.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
-                                    origin_id_list.append(origin_id)
-                                    destination_id_list.append(destination_id)
-                                    fuel_stop_list.append(fuel_stop)
-
-                                    flights_per_year.append(
-                                        acft.calc_flights_per_year(
-                                            city_data.loc[origin_id],
-                                            city_data.loc[destination_id],
-                                            aircraft,
-                                            city_pair_data,
-                                            city_data.loc[fuel_stop],
-                                        )
+                                    (
+                                        aircraft_id_list,
+                                        aircraft_size_list,
+                                        aircraft_age_list,
+                                        current_lease_list,
+                                        breguet_factor_list,
+                                        origin_id_list,
+                                        destination_id_list,
+                                        fuel_stop_list,
+                                        flights_per_year_list,
+                                        city_pair_data,
+                                        airline_routes,
+                                    ) = create_aircraft(
+                                        aircraft_id_list,
+                                        aircraft_id_list,
+                                        aircraft_size_list,
+                                        aircraft_size_list,
+                                        aircraft_age_list,
+                                        randomGen,
+                                        aircraft,
+                                        current_lease_list,
+                                        breguet_factor_list,
+                                        year,
+                                        origin_id,
+                                        destination_id,
+                                        fuel_stop,
+                                        flights_per_year_list,
+                                        city_data,
+                                        city_pair_data,
+                                        airline_routes,
+                                        airline_id,
+                                        outbound_route,
+                                        inbound_route,
                                     )
-
-                                    # update outbound and return route in-place in city_pair_data DataFrame
-                                    city_pair_data.loc[
-                                        (city_pair_data["OriginCityID"] == origin_id)
-                                        & (city_pair_data["DestinationCityID"] == destination_id),
-                                        "Seat_Flights_perYear"
-                                    ] += flights_per_year[-1] * aircraft["Seats"]
-                                    city_pair_data.loc[
-                                        (city_pair_data["OriginCityID"] == destination_id)
-                                        & (city_pair_data["DestinationCityID"] == origin_id),
-                                        "Seat_Flights_perYear"
-                                    ] += flights_per_year[-1] * aircraft["Seats"]
-
-                                    # update airline-specific route dataframe
-                                    not_route_exists = airline_routes[airline_id][
-                                        (airline_routes[airline_id]["origin"] == origin_id)
-                                        & (airline_routes[airline_id]["destination"] == destination_id)
-                                    ].empty
-                                    if not_route_exists:
-                                        seat_flights_per_year = flights_per_year[-1] * aircraft["Seats"]
-                                        airline_routes_newrow_1 = {
-                                            "origin": origin_id,
-                                            "destination": destination_id,
-                                            "fare": outbound_route["Fare_Est"],
-                                            "aircraft_ids": [aircraft_id],
-                                            "seat_flights_per_year": seat_flights_per_year
-                                        }
-                                        new_df_1 = pd.DataFrame(airline_routes_newrow_1)
-                                        airline_routes_newrow_2 = {
-                                            "origin": destination_id,
-                                            "destination": origin_id,
-                                            "fare": inbound_route["Fare_Est"],
-                                            "aircraft_ids": [aircraft_id],
-                                            "seat_flights_per_year": seat_flights_per_year
-                                        }
-                                        new_df_2 = pd.DataFrame(airline_routes_newrow_2)
-                                        airline_routes[airline_id] = pd.concat([
-                                            airline_routes[airline_id], 
-                                            new_df_1,
-                                            new_df_2
-                                        ], ignore_index=True)
-                                    else:
-                                        airline_routes[airline_id].loc[
-                                            (airline_routes[airline_id]["origin"] == origin_id)
-                                            & (airline_routes[airline_id]["destination"] == destination_id),
-                                            "aircraft_ids"
-                                        ].iloc[0].append(aircraft_id)
-                                        airline_routes[airline_id].loc[
-                                            (airline_routes[airline_id]["origin"] == origin_id)
-                                            & (airline_routes[airline_id]["destination"] == destination_id),
-                                            "seat_flights_per_year"
-                                        ].iloc[0] += flights_per_year[-1] * aircraft["Seats"]
 
                         else:
                             break
@@ -468,14 +393,155 @@ def initialise_fleet_assignment(
 
         fleet_df["AircraftID"] = aircraft_id_list
         fleet_df["SizeClass"] = aircraft_size_list
-        fleet_df["Age_years"] = aircraft_age
-        fleet_df["Lease_USDperMonth"] = current_lease
-        fleet_df["BreguetFactor"] = breguet_factor
+        fleet_df["Age_years"] = aircraft_age_list
+        fleet_df["Lease_USDperMonth"] = current_lease_list
+        fleet_df["BreguetFactor"] = breguet_factor_list
         fleet_df["RouteOrigin"] = origin_id_list
         fleet_df["RouteDestination"] = destination_id_list
         fleet_df["FuelStop"] = fuel_stop_list
-        fleet_df["Flights_perYear"] = flights_per_year
+        fleet_df["Flights_perYear"] = flights_per_year_list
 
         airline_fleets[airline_id] = fleet_df
 
     return airline_fleets, airline_routes, city_pair_data
+
+
+def create_aircraft(
+    aircraft_id_list: list,
+    aircraft_id: int,
+    aircraft_size_list: list,
+    aircraft_size: int,
+    aircraft_age_list: list,
+    randomGen: np.random.Generator,
+    aircraft: pd.Series,
+    current_lease_list: list,
+    breguet_factor_list: list,
+    year: int,
+    origin_id_list: list,
+    origin_id: int,
+    destination_id_list: list,
+    destination_id: int,
+    fuel_stop_list: list,
+    fuel_stop: int | None,
+    flights_per_year_list: list,
+    city_data: pd.DataFrame,
+    city_pair_data: pd.DataFrame,
+    airline_routes: list[pd.DataFrame],
+    airline_id: int,
+    outbound_route: pd.Series,
+    inbound_route: pd.Series,
+):
+    aircraft_id_list.append(aircraft_id)
+    aircraft_size_list.append(aircraft_size)
+    aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
+    current_lease_list.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age_list[-1]))
+    breguet_factor_list.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
+    origin_id_list.append(origin_id)
+    destination_id_list.append(destination_id)
+    fuel_stop_list.append(fuel_stop)
+
+    if fuel_stop is None:
+        fuel_stop_series = None
+    else:
+        fuel_stop_series = city_data.loc[fuel_stop]
+
+    flights_per_year_list.append(
+        acft.calc_flights_per_year(
+            city_data.loc[origin_id],
+            city_data.loc[destination_id],
+            aircraft,
+            city_pair_data,
+            fuel_stop_series,
+        )
+    )
+
+    # update outbound and return route in-place in city_pair_data DataFrame
+    seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
+
+    city_pair_data.loc[
+        (city_pair_data["OriginCityID"] == origin_id)
+        & (city_pair_data["DestinationCityID"] == destination_id),
+        "seat_flights_per_year"
+    ] += seat_flights_per_year
+    city_pair_data.loc[
+        (city_pair_data["OriginCityID"] == destination_id)
+        & (city_pair_data["DestinationCityID"] == origin_id),
+        "seat_flights_per_year"
+    ] += seat_flights_per_year
+
+    # update airline-specific route dataframe
+    not_route_exists = airline_routes[airline_id][
+        (airline_routes[airline_id]["origin"] == origin_id)
+        & (airline_routes[airline_id]["destination"] == destination_id)
+    ].empty
+    if not_route_exists:
+        airline_routes_newrow_1 = {
+            "origin": origin_id,
+            "destination": destination_id,
+            "fare": outbound_route["Fare_Est"],
+            "aircraft_ids": [aircraft_id],
+            "flights_per_year": flights_per_year_list[-1],
+            "seat_flights_per_year": seat_flights_per_year
+        }
+        new_df_1 = pd.DataFrame(airline_routes_newrow_1)
+        airline_routes_newrow_2 = {
+            "origin": destination_id,
+            "destination": origin_id,
+            "fare": inbound_route["Fare_Est"],
+            "aircraft_ids": [aircraft_id],
+            "flights_per_year": flights_per_year_list[-1],
+            "seat_flights_per_year": seat_flights_per_year
+        }
+        new_df_2 = pd.DataFrame(airline_routes_newrow_2)
+        airline_routes[airline_id] = pd.concat([
+            airline_routes[airline_id], 
+            new_df_1,
+            new_df_2
+        ], ignore_index=True)
+    else:
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == origin_id)
+            & (airline_routes[airline_id]["destination"] == destination_id),
+            "aircraft_ids"
+        ].iloc[0].append(aircraft_id)
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == destination_id)
+            & (airline_routes[airline_id]["destination"] == origin_id),
+            "aircraft_ids"
+        ].iloc[0].append(aircraft_id)
+
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == origin_id)
+            & (airline_routes[airline_id]["destination"] == destination_id),
+            "flights_per_year"
+        ].iloc[0] += flights_per_year_list[-1]
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == destination_id)
+            & (airline_routes[airline_id]["destination"] == origin_id),
+            "flights_per_year"
+        ].iloc[0] += flights_per_year_list[-1]
+
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == origin_id)
+            & (airline_routes[airline_id]["destination"] == destination_id),
+            "seat_flights_per_year"
+        ].iloc[0] += seat_flights_per_year
+        airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == destination_id)
+            & (airline_routes[airline_id]["destination"] == origin_id),
+            "seat_flights_per_year"
+        ].iloc[0] += seat_flights_per_year
+
+    return (
+        aircraft_id_list,
+        aircraft_size_list,
+        aircraft_age_list,
+        current_lease_list,
+        breguet_factor_list,
+        origin_id_list,
+        destination_id_list,
+        fuel_stop_list,
+        flights_per_year_list,
+        city_pair_data,
+        airline_routes,
+    )

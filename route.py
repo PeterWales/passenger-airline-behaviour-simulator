@@ -45,6 +45,10 @@ def initialise_routes(
     # set CityID as index for faster lookups
     city_data.set_index('CityID', inplace=True)
 
+    # initialise whole columns
+    city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
+    city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
+
     # initialise lists using 32-bit data types where possible for memory efficiency
     n = len(city_pair_data)
     remove_idx = []
@@ -54,6 +58,7 @@ def initialise_routes(
     origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
     destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
     seat_flights_per_year = np.zeros(n, dtype=np.int32)
+    static_demand_factor = np.zeros(n)
 
     # show a progress bar because this step can take a while
     for idx, route in tqdm(
@@ -106,7 +111,7 @@ def initialise_routes(
             )
 
             # calculate base year static demand factor
-            calc_static_demand_factor(
+            static_demand_factor[idx] = calc_static_demand_factor(
                 origin["Population"],
                 destination["Population"],
                 origin["BaseYearPopulation"],
@@ -121,11 +126,12 @@ def initialise_routes(
             )
     
     city_pair_data['Great_Circle_Distance_m'] = distance.astype('float32')
-    city_pair_data['Price_Elasticity'] = price_elasticity_route.astype('float32')
-    city_pair_data['Price_Elasticity'] = price_elasticity_national.astype('float32')
+    city_pair_data['Price_Elasticity_Route'] = price_elasticity_route.astype('float32')
+    city_pair_data['Price_Elasticity_National'] = price_elasticity_national.astype('float32')
     city_pair_data['Origin_Income_Elasticity'] = origin_income_elasticity.astype('float32')
     city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
     city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
+    city_pair_data["Static_Demand_Factor"] = static_demand_factor
 
     # remove flagged routes
     city_pair_data.drop(remove_idx, inplace=True)
@@ -355,7 +361,6 @@ def choose_fuel_stop(
 
     Parameters
     ----------
-    city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
     origin : pd.Series
     destination : pd.Series
