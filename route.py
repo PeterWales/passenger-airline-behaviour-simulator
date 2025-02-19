@@ -1,450 +1,422 @@
-from city import City
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from pygeodesy import sphericalNvector as snv
 
 
-class Route:
+def initialise_routes(
+    city_data: pd.DataFrame,
+    city_pair_data: pd.DataFrame,
+    price_elasticities: pd.DataFrame,
+    income_elasticities: pd.DataFrame,
+    population_elasticity: float,
+) -> pd.DataFrame:
     """
-    Class for keeping track of route data
+    Initialise the routes between cities with demand and elasticity data.
 
-    Attributes
+    Parameters
     ----------
-    route_id : int
-    origin : City
-        Instance of City dataclass for origin city
-    destination : City
-        Instance of City dataclass for destination city
-    base_demand : int
-        Base year demand for the route in passengers
-    current_demand : int
-        Current year demand for the route in passengers
-        Total demand for all itineraries
-    base_mean_fare : float
-        Base year mean fare (all itineraries) for the route in USD
-    mean_fare : float
-        Current year mean fare (all itineraries) for the route in USD
-    price_elasticities : pd.Series
-        Price elasticity of demand values for the route
-        Initially contains fields:
-            route_SH, route_LH, national_SH, national_LH
-        Additional fields are added upon first call to update_price_elasticity:
-            route, national
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    price_elasticities : pd.DataFrame
+    income_elasticities : pd.DataFrame
     population_elasticity : float
-        Population elasticity of demand for the route
-    static_demand_factor : float
-        Factor for demand independent of fare, valid for the current year
-    distance : float
-        Great circle distance between origin and destination cities in meters
-    waypoints : list
-        List of dictionaries containing latitude and longitude of waypoints
-    origin_income_elasticity : float
-        Income elasticity of demand for the origin city
-    destination_income_elasticity : float
-        Income elasticity of demand for the destination city
-    seat_flights_per_year : int
-        Total number of seat flights per year on the route across all itineraries
 
-    Methods
+    Returns
     -------
-    initialise_routes(
-        cities: list,
-        city_pair_data: pd.DataFrame,
-        price_elasticities: pd.DataFrame,
-        income_elasticities: pd.DataFrame,
-        population_elasticity: float
-    ) -> list
-        Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
-    
-    update_route() -> None
-        Use Haversine formula to calculate the great circle distance and route between the origin and destination cities
-    
-    update_price_elasticity() -> None
-        Determine whether the route is long or short haul and assign the appropriate elasticity values
-    
-    update_income_elasticity(income_elasticities: pd.DataFrame) -> None
-        Determine whether the route is short/medium/long/ultra long haul.
-        Determine whether the origin and destination are in the U.S., another developed country or a developing country.
-        Assign the appropriate income elasticity values
-
-    update_static_demand_factor() -> None
-        Calculate the total route demand factor from effects independent of fare
-    
-    update_demand() -> None
-        Update the route demand based on fare and annual static factors
+    city_pair_data : pd.DataFrame
     """
+    # arbitrary thresholds for flight types in meters
+    price_elas_LH_threshold = 3000 * 1609.344
+    income_elas_thresholds = {
+        "short": 0.0,
+        "medium": 1000*1609.344,
+        "long": 3000*1609.344,
+        "ultra_long": 5000*1609.344
+    }
 
-    def __init__(
-        self,
-        route_id: int,
-        origin: City,
-        destination: City,
-        base_demand: int,
-        base_mean_fare: float,
-        price_elasticities: pd.Series,
-        population_elasticity: float,
+    # World Bank GNI thresholds for country income levels
+    GNI_thresholds = {
+        "lower_middle": 1166,
+        "upper_middle": 4526,
+        "high": 14005
+    }
+
+    # set CityID as index for faster lookups
+    city_data.set_index('CityID', inplace=True)
+
+    # initialise whole columns
+    city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
+    city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
+    city_pair_data["seat_flights_per_year"] = 0
+
+    # initialise lists using 32-bit data types where possible for memory efficiency
+    n = len(city_pair_data)
+    remove_idx = []
+    distance = np.full(n, fill_value=0, dtype=np.float32)
+    price_elasticity_route = np.full(n, fill_value=0, dtype=np.float32)
+    price_elasticity_national = np.full(n, fill_value=0, dtype=np.float32)
+    origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
+    destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
+    seat_flights_per_year = np.zeros(n, dtype=np.int32)
+    static_demand_factor = np.zeros(n)
+
+    # show a progress bar because this step can take a while
+    for idx, route in tqdm(
+        city_pair_data.iterrows(),
+        total=city_pair_data.shape[0],
+        desc="        Routes created",
+        ascii=False,
+        ncols=75,
     ):
-        self.route_id = route_id
-        self.origin = origin
-        self.destination = destination
-        self.base_demand = base_demand
-        self.current_demand = base_demand
-        self.base_mean_fare = base_mean_fare
-        self.mean_fare = base_mean_fare
-        self.price_elasticities = price_elasticities
-        self.population_elasticity = population_elasticity
-        self.static_demand_factor = 1.0  # due to no change in GDP or population until after first year
-        self.distance = None
-        self.waypoints = None
-        self.origin_income_elasticity = None
-        self.destination_income_elasticity = None
-        self.seat_flights_per_year = 0
+        origin_id = route["OriginCityID"]
+        destination_id = route["DestinationCityID"]
 
-    @staticmethod
-    def initialise_routes(
-        cities: list,
-        city_pair_data: pd.DataFrame,
-        price_elasticities: pd.DataFrame,
+        if (origin_id == destination_id) or (origin_id == 0) or (destination_id == 0):
+            # flag for removal
+            remove_idx.append(idx)
+        else:
+            origin = city_data.loc[origin_id]
+            destination = city_data.loc[destination_id]
+
+            # calculate great circle distance between origin and destination cities
+            distance[idx] = calc_great_circle_distance(
+                origin["Latitude"],
+                origin["Longitude"],
+                destination["Latitude"],
+                destination["Longitude"]
+            )
+
+            # retrieve the relevant price_elasticity of demand - note OD_1 <= OD_2
+            price_elasticities_idx = price_elasticities.loc[
+                (price_elasticities["OD_1"] == min(origin["Region"], destination["Region"]))
+                & (price_elasticities["OD_2"] == max(origin["Region"], destination["Region"]))
+            ].index[0]
+            if (distance[idx] < price_elas_LH_threshold):
+                haul = "SH"
+            else:
+                haul = "LH"
+            price_elasticity_route[idx] = price_elasticities.loc[price_elasticities_idx, f"route_{haul}"]
+            price_elasticity_national[idx] = price_elasticities.loc[price_elasticities_idx, f"national_{haul}"]
+
+            # retrieve the relevant income_elasticity of demand
+            origin_income_elasticity[idx], destination_income_elasticity[idx] = route_income_elasticity(
+                income_elasticities,
+                distance[idx],
+                income_elas_thresholds,
+                GNI_thresholds,
+                origin["Country"],
+                destination["Country"],
+                origin["Income_USDpercap"],
+                destination["Income_USDpercap"],
+            )
+
+            # calculate base year static demand factor
+            static_demand_factor[idx] = calc_static_demand_factor(
+                origin["Population"],
+                destination["Population"],
+                origin["BaseYearPopulation"],
+                destination["BaseYearPopulation"],
+                origin["Income_USDpercap"],
+                destination["Income_USDpercap"],
+                origin["BaseYearIncome"],
+                destination["BaseYearIncome"],
+                origin_income_elasticity[idx],
+                destination_income_elasticity[idx],
+                population_elasticity,
+            )
+    
+    city_pair_data['Great_Circle_Distance_m'] = distance.astype('float32')
+    city_pair_data['Price_Elasticity_Route'] = price_elasticity_route.astype('float32')
+    city_pair_data['Price_Elasticity_National'] = price_elasticity_national.astype('float32')
+    city_pair_data['Origin_Income_Elasticity'] = origin_income_elasticity.astype('float32')
+    city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
+    city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
+    city_pair_data["Static_Demand_Factor"] = static_demand_factor
+
+    # remove flagged routes
+    city_pair_data.drop(remove_idx, inplace=True)
+
+    return city_pair_data
+
+
+def calc_great_circle_distance(origin_lat, origin_long, destination_lat, destination_long) -> float:
+    """
+    Calculate the great circle distance at the earth's surface in meters between the origin and destination cities.
+
+    Parameters
+    ----------
+    origin_lat : float
+        Latitude of the origin city
+    origin_long : float
+        Longitude of the origin city
+    destination_lat : float
+        Latitude of the destination city
+    destination_long : float
+        Longitude of the destination city
+    
+    Returns
+    -------
+    distance : float
+        Great circle distance between the origin and destination cities in meters
+    """
+    # TODO: generate waypoints between origin and destination to route around airspace restrictions
+    origin_coords = snv.LatLon(origin_lat, origin_long)
+    destination_coords = snv.LatLon(destination_lat, destination_long)
+    return origin_coords.distanceTo(destination_coords)
+
+
+def route_income_elasticity(
         income_elasticities: pd.DataFrame,
-        population_elasticity: float,
-    ) -> list:
-        """
-        Generate 2D list of instances of Route dataclass from cities and contents of DataByCityPair and Elasticities files
+        distance: float,
+        income_elas_thresholds: dict,
+        GNI_thresholds: dict,
+        origin_country_code: int,
+        destination_country_code: int,
+        origin_income_USDpercap: float,
+        destination_income_USDpercap: float,
+    ) -> tuple[float, float]:
+    """
+    Retrieve the appropriate income elasticity values to the origin and destination cities.
 
-        Parameters
-        ----------
-        cities : list of instances of City dataclass
-        city_pair_data : pd.DataFrame
-        price_elasticities : pd.DataFrame
-        income_elasticities : pd.DataFrame
-        population_elasticity : float
+    Parameters
+    ----------
+    income_elasticities : pd.DataFrame
+    distance : float
+    income_elas_thresholds : dict
+    GNI_thresholds : dict
+    country_code : int
+    origin_income_USDpercap : float
+    destination_income_USDpercap : float
 
-        Returns
-        -------
-        routes : 2D list of instances of Route dataclass, indexed by [OriginCityID][DestinationCityID]
-        """
-        # order price_elasticities dataframe by OD_1 and OD_2
-        price_elasticities = price_elasticities.sort_values(by=["OD_1", "OD_2"])
+    Returns
+    -------
+    origin_income_elasticity : float
+    destination_income_elasticity : float
+    """
+    if distance < income_elas_thresholds["medium"]:
+        haul = "SH"
+    elif distance < income_elas_thresholds["long"]:
+        haul = "MH"
+    elif distance < income_elas_thresholds["ultra_long"]:
+        haul = "LH"
+    else:
+        haul = "ULH"
+    
+    origin_income_elasticity = city_income_elasticity(
+        income_elasticities,
+        haul,
+        GNI_thresholds,
+        origin_country_code,
+        origin_income_USDpercap,
+    )
+    destination_income_elasticity = city_income_elasticity(
+        income_elasticities,
+        haul,
+        GNI_thresholds,
+        destination_country_code,
+        destination_income_USDpercap,
+    )
 
-        n_cities = len(cities)
-        routes = [[None for _ in range(n_cities)] for _ in range(n_cities)]
-
-        route_id = 0
-
-        # show a progress bar because this step can take a while
-        for idx, route in tqdm(
-            city_pair_data.iterrows(),
-            total=city_pair_data.shape[0],
-            desc="        Routes created",
-            ascii=False,
-            ncols=75,
-        ):
-            origin_id = int(route["OriginCityID"])
-            destination_id = int(route["DestinationCityID"])
-
-            if origin_id == 0 or destination_id == 0 or origin_id == destination_id:
-                continue
-
-            # find the elasticity values for the current route - note OD_1 <= OD_2
-            price_elasticities_series = price_elasticities.loc[
-                (
-                    price_elasticities["OD_1"]
-                    == min(cities[origin_id].region, cities[destination_id].region)
-                )
-                & (
-                    price_elasticities["OD_2"]
-                    == max(cities[origin_id].region, cities[destination_id].region)
-                )
-            ]
-            # convert from DataFrame to Series
-            price_elasticities_series = price_elasticities_series.squeeze()
-
-            routes[origin_id][destination_id] = Route(
-                route_id=route_id,
-                origin=cities[origin_id],
-                destination=cities[destination_id],
-                base_demand=route["BaseYearODDemandPax_Est"],
-                base_mean_fare=route["Fare_Est"],
-                price_elasticities=price_elasticities_series,
-                population_elasticity=population_elasticity,
-            )
-            # calculate distance and save waypoints
-            routes[origin_id][destination_id].update_route()
-            # calculate initial elasticities and static demand factor
-            routes[origin_id][destination_id].update_price_elasticity()
-            routes[origin_id][destination_id].update_income_elasticity(income_elasticities)
-            routes[origin_id][destination_id].update_static_demand_factor()
-
-            route_id += 1
-        return routes
+    return origin_income_elasticity, destination_income_elasticity
 
 
-    @staticmethod
-    def choose_fuel_stop(
-        routes: list,
-        cities: list,
-        origin: int,
-        destination: int,
-        range: float,
-        min_runway_m: float
-    ) -> int:
-        """
-        Choose a fuel stop city for a route based on range and runway length requirements.
+def city_income_elasticity(
+    income_elasticities: pd.DataFrame,
+    haul: str,
+    GNI_thresholds: dict,
+    country_code: int,
+    income_USDpercap: float,
+) -> float:
+    """
+    Determine the income elasticity of demand for a city based on its income level and length of route it is associated with.
+    Used in route_income_elasticity to avoid code repetition.
 
-        Parameters
-        ----------
-        routes : list of instances of Route dataclass
-        cities : list of instances of City dataclass
-        origin : int
-            Origin city ID
-        destination : int
-            Destination city ID
-        range : float
-            Maximum range of the aircraft in meters
-        min_runway_m : float
-            Minimum runway length required for the aircraft in meters
+    Parameters
+    ----------
+    income_elasticities : pd.DataFrame
+    haul : str
+    GNI_thresholds : dict
+    country_code : int
+    income_USDpercap : float
 
-        Returns
-        -------
-        fuel_stop : int | None
-            City ID of the chosen fuel stop or None if no suitable city is found
-        """
-        # calculate the midpoint between the origin and destination
-        origin_coords = snv.LatLon(
-            routes[origin][destination].origin.latitude,
-            routes[origin][destination].origin.longitude
+    Returns
+    -------
+    income_elasticity : float
+    """
+    # TODO: determine U.S. country code programmatically
+
+    if country_code == 204:  # U.S. country code
+        income_elasticity = income_elasticities.loc[
+            income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
+        ].iloc[0]
+    elif income_USDpercap < GNI_thresholds["lower_middle"]:
+        income_elasticity = income_elasticities.loc[
+            income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+        ].iloc[0]
+    elif income_USDpercap < GNI_thresholds["high"]:
+        # linearly interpolate between developing and developed country elasticities
+        gradient = (
+            income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developed",
+                f"elasticity_{haul}",
+            ].iloc[0]
+            - income_elasticities.loc[
+                income_elasticities["CountryType"] == "Developing",
+                f"elasticity_{haul}",
+            ].iloc[0]
+        ) / (GNI_thresholds["high"] - GNI_thresholds["lower_middle"])
+        income_elasticity = income_elasticities.loc[
+            income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
+        ].iloc[0] + gradient * (income_USDpercap - GNI_thresholds["lower_middle"])
+    else:
+        income_elasticity = income_elasticities.loc[
+            income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
+        ].iloc[0]
+
+    return income_elasticity
+
+
+def calc_static_demand_factor(
+    origin_population: float,
+    destination_population: float,
+    origin_base_population: float,
+    destination_base_population: float,
+    origin_income_USDpercap: float,
+    destination_income_USDpercap: float,
+    origin_base_income_USDpercap: float,
+    destination_base_income_USDpercap: float,
+    origin_income_elasticity: float,
+    destination_income_elasticity: float,
+    population_elasticity: float
+) -> float:
+    """
+    Calculate the total route demand factor from effects independent of fare.
+
+    Parameters
+    ----------
+    origin_population : float
+    destination_population : float
+    origin_base_population : float
+    destination_base_population : float
+    origin_income_USDpercap : float
+    destination_income_USDpercap : float
+    origin_base_income_USDpercap : float
+    destination_base_income_USDpercap : float
+    origin_income_elasticity : float
+    destination_income_elasticity : float
+    population_elasticity : float
+
+    Returns
+    -------
+    static_demand_factor : float
+    """
+    # assume demand originating from each city is proportional to the city's population * income
+    origin_demand_weight = (
+        (origin_population * origin_income_USDpercap)
+        / ((origin_population * origin_income_USDpercap)
+            + (destination_population * destination_income_USDpercap))
+    )
+    destination_demand_weight = 1 - origin_demand_weight
+    
+    income_factor_origin = 1 + (
+        ((origin_income_USDpercap - origin_base_income_USDpercap) 
+            / origin_base_income_USDpercap) * origin_income_elasticity)
+
+    income_factor_destination = 1 + (
+        ((destination_income_USDpercap - destination_base_income_USDpercap) 
+            / destination_base_income_USDpercap) * destination_income_elasticity)
+
+    # total income factor weighted by population * income
+    income_factor = (
+        (origin_demand_weight * income_factor_origin)
+        + (destination_demand_weight * income_factor_destination)
+    )
+
+    population_factor_origin = 1 + (
+        ((origin_population - origin_base_population) 
+            / origin_base_population) * population_elasticity)
+
+    population_factor_destination = 1 + (
+        ((destination_population - destination_base_population) 
+            / destination_base_population) * population_elasticity)
+
+    # total population factor weighted by population * income
+    population_factor = (
+        (origin_demand_weight * population_factor_origin)
+        + (destination_demand_weight * population_factor_destination)
+    )
+
+    return income_factor * population_factor
+
+
+def choose_fuel_stop(
+    city_data: pd.DataFrame,
+    origin: pd.Series,
+    destination: pd.Series,
+    aircraft_range: float,
+    min_runway_m: float
+) -> int:
+    """
+    Choose a fuel stop city for a route based on range and runway length requirements.
+
+    Parameters
+    ----------
+    city_data : pd.DataFrame
+    origin : pd.Series
+    destination : pd.Series
+    aircraft_range : float
+    min_runway_m : float
+
+    Returns
+    -------
+    fuel_stop : int | None
+        City ID of the chosen fuel stop or None if no suitable city is found
+    """
+    # calculate the midpoint between the origin and destination
+    origin_coords = snv.LatLon(
+        origin["Latitude"],
+        origin["Longitude"]
+    )
+    destination_coords = snv.LatLon(
+        destination["Latitude"],
+        destination["Longitude"]
+    )
+
+    midpoint = origin_coords.midpointTo(destination_coords)
+
+    # find the nearest city to the midpoint that has a long enough runway
+    fuel_stop = None
+    min_distance = np.inf
+    for city_id, city in city_data.iterrows():
+        city_coords = snv.LatLon(
+            city["Latitude"],
+            city["Longitude"],
         )
-
-        destination_coords = snv.LatLon(
-            routes[origin][destination].destination.latitude,
-            routes[origin][destination].destination.longitude
-        )
-
-        midpoint = origin_coords.midpointTo(destination_coords)
-
-        # find the nearest city to the midpoint that has a long enough runway
-        fuel_stop = None
-        min_distance = np.inf
-        for city in cities:
-            city_coords = snv.LatLon(
-                city.latitude,
-                city.longitude,
-            )
-            distance = midpoint.distanceTo(city_coords)
+        distance = midpoint.distanceTo(city_coords)
+        if distance < min_distance:
+            # check that runway and leg distances are suitable for the aircraft
             if (
-                distance < min_distance
-                and city.runway_length_m > min_runway_m
+                city["LongestRunway_m"] > min_runway_m
+                and origin_coords.distanceTo(city_coords) < aircraft_range
+                and city_coords.distanceTo(destination_coords) < aircraft_range
             ):
-                # check that both legs are less than the range of the aircraft
-                if (
-                    origin_coords.distanceTo(city_coords) < range
-                    and city_coords.distanceTo(destination_coords) < range
-                ):
-                    fuel_stop = city.city_id
-                    min_distance = distance
-        return fuel_stop
-        
+                fuel_stop = city_id
+                min_distance = distance
+    return fuel_stop
 
-    def update_route(self) -> None:
-        """
-        Use Haversine formula to calculate the great circle distance and route between the origin and destination cities.
-        Updates self.distance and self.waypoints.
-        """
-        # TODO: generate waypoints between origin and destination to route around airspace restrictions
 
-        self.waypoints = [
-            {
-                "latitude": self.origin.latitude,
-                "longitude": self.origin.longitude
-            },
-            {
-                "latitude": self.destination.latitude,
-                "longitude": self.destination.longitude,
-            },
-        ]
+# def update_demand(self) -> None:
+#     """
+#     Update the route demand based on fare and annual static factors.
 
-        r = 6378000.0  # mean radius of the earth in meters
-        self.distance = 0.0
-        for wpt_num in range(len(self.waypoints) - 1):
-            term1 = 1.0 - np.cos(
-                np.deg2rad(
-                    self.waypoints[wpt_num + 1]["latitude"]
-                    - self.waypoints[wpt_num]["latitude"]
-                )
-            )
-            term2 = (
-                np.cos(np.deg2rad(self.waypoints[wpt_num]["latitude"]))
-                * np.cos(np.deg2rad(self.waypoints[wpt_num+1]["latitude"]))
-                * (1 - np.cos(np.deg2rad(
-                    self.waypoints[wpt_num+1]["longitude"]
-                    - self.waypoints[wpt_num]["longitude"]))
-                )
-            )
-            # Haversine Formula can result in numerical errors when origin and destination approach opposite sides of the earth
-            self.distance += min(
-                2.0 * r * np.asin(np.sqrt((term1 + term2) / 2)),
-                np.pi * r
-            )
+#     Updates self.current_demand.
+#     """
+#     # TODO: add input for national taxes
+#     fare_factor = 1 + (
+#         ((self.mean_fare - self.base_mean_fare) / self.base_mean_fare)
+#         * self.price_elasticities["route"]
+#     )
+#     # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
 
-    def update_price_elasticity(self) -> None:
-        """
-        Determine whether the route is long or short haul and assign the appropriate elasticity values.
-        Updates/adds self.price_elasticities["route"] and self.price_elasticities["national"].
-        """
-        if (self.distance < 3000 * 1609.344):
-            # arbitrary threshold for short/long haul (3000 miles)
-            haul = "SH"
-        else:
-            haul = "LH"
-        self.price_elasticities["route"] = self.price_elasticities[f"route_{haul}"]
-        self.price_elasticities["national"] = self.price_elasticities[f"national_{haul}"]
-
-    def update_income_elasticity(self, income_elasticities: pd.DataFrame) -> None:
-        """
-        Determine whether the route is short/medium/long/ultra long haul.
-        Determine whether the origin and destination are in the U.S., another developed country or a developing country.
-        Assign the appropriate income elasticity values.
-
-        Parameters
-        ----------
-        income_elasticities : pd.DataFrame
-
-        Updates self.origin_income_elasticity and self.destination_income_elasticity.
-        """
-        # TODO: determine U.S. country code programmatically
-        # TODO: add a static function to avoid code duplication
-
-        if self.distance < 1000 * 1609.344:
-            # arbitrary threshold for short/medium haul (1000 miles)
-            haul = "SH"
-        elif self.distance < 3000 * 1609.344:
-            # arbitrary threshold for medium/long haul (3000 miles)
-            haul = "MH"
-        elif self.distance < 5000 * 1609.344:
-            # arbitrary threshold for long/ultra long haul (5000 miles)
-            haul = "LH"
-        else:
-            haul = "ULH"
-
-        # World Bank GNI thresholds for country income levels
-        lower_middle_income = 1166
-        upper_middle_income = 4526
-        high_income = 14005
-
-        # origin
-        if self.origin.country == 204:  # U.S. country code
-            self.origin_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
-            ]
-        elif self.origin.income_USDpercap < lower_middle_income:
-            self.origin_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
-            ]
-        elif self.origin.income_USDpercap < high_income:
-            # linearly interpolate between developing and developed country elasticities
-            gradient = (
-                income_elasticities.loc[
-                    income_elasticities["CountryType"] == "Developed",
-                    f"elasticity_{haul}",
-                ]
-                - income_elasticities.loc[
-                    income_elasticities["CountryType"] == "Developing",
-                    f"elasticity_{haul}",
-                ]
-            ) / (high_income - lower_middle_income)
-            self.origin_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
-            ] + gradient * (self.origin.income_USDpercap - lower_middle_income)
-        else:
-            self.origin_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
-            ]
-
-        # destination
-        if self.destination.country == 204:  # U.S. country code
-            self.destination_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
-            ]
-        elif self.destination.income_USDpercap < lower_middle_income:
-            self.destination_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
-            ]
-        elif self.destination.income_USDpercap < high_income:
-            # linearly interpolate between developing and developed country elasticities
-            gradient = (
-                income_elasticities.loc[
-                    income_elasticities["CountryType"] == "Developed",
-                    f"elasticity_{haul}",
-                ]
-                - income_elasticities.loc[
-                    income_elasticities["CountryType"] == "Developing",
-                    f"elasticity_{haul}",
-                ]
-            ) / (high_income - lower_middle_income)
-            self.destination_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
-            ] + gradient * (self.destination.income_USDpercap - lower_middle_income)
-        else:
-            self.destination_income_elasticity = income_elasticities.loc[
-                income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"
-            ]
-
-    def update_static_demand_factor(self) -> None:
-        """
-        Calculate the total route demand factor from effects independent of fare.
-
-        Updates self.static_demand_factor.
-        """
-        # assume demand originating from each city is proportional to the city's population * income
-        origin_demand_weight = (
-            (self.origin.population * self.origin.income_USDpercap)
-            / (self.origin.population * self.origin.income_USDpercap
-               + self.destination.population * self.destination.income_USDpercap)
-        )
-        destination_demand_weight = 1 - origin_demand_weight
-        
-        income_factor_origin = 1 + (
-            ((self.origin.income_USDpercap - self.origin.base_income_USDpercap) 
-             / self.origin.base_income_USDpercap) * self.origin_income_elasticity)
-
-        income_factor_destination = 1 + (
-            ((self.destination.income_USDpercap - self.destination.base_income_USDpercap) 
-             / self.destination.base_income_USDpercap) * self.destination_income_elasticity)
-
-        # total income factor weighted by population * income
-        income_factor = (
-            origin_demand_weight * income_factor_origin
-            + destination_demand_weight * income_factor_destination
-        )
-
-        population_factor_origin = 1 + (
-            ((self.origin.population - self.origin.base_population) 
-             / self.origin.base_population) * self.population_elasticity)
-
-        population_factor_destination = 1 + (
-            ((self.destination.population - self.destination.base_population) 
-             / self.destination.base_population) * self.population_elasticity)
-
-        # total population factor weighted by population * income
-        population_factor = (
-            origin_demand_weight * population_factor_origin
-            + destination_demand_weight * population_factor_destination
-        )
-
-        self.static_demand_factor = income_factor * population_factor
-
-    def update_demand(self) -> None:
-        """
-        Update the route demand based on fare and annual static factors.
-
-        Updates self.current_demand.
-        """
-        # TODO: add input for national taxes
-        fare_factor = 1 + (
-            ((self.mean_fare - self.base_mean_fare) / self.base_mean_fare)
-            * self.price_elasticities["route"]
-        )
-        # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
-
-        self.current_demand = self.base_demand * fare_factor * self.static_demand_factor
+#     self.current_demand = self.base_demand * fare_factor * self.static_demand_factor

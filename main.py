@@ -1,11 +1,10 @@
 import os
 import pandas as pd
-from city import City
-from airline import Airline
-from route import Route
-from aircraft import Aircraft
+import city
+import route
+import airline
+import aircraft
 import random
-from tqdm import tqdm
 import pickle
 
 
@@ -28,116 +27,154 @@ def main():
         if not os.path.exists(save_folder_path):
             os.makedirs(save_folder_path)
         savepath = os.path.join(
-            save_folder_path, f"output_{run_parameters["RunID"]}.csv"
+            save_folder_path, f"output_{run_parameters['RunID']}.csv"
         )
 
-        # import run-specific data
-        print(f"    Importing data from {data_path}")
-
-        aircraft_data = pd.read_csv(os.path.join(data_path, "AircraftData.csv"))
-        airport_data = pd.read_csv(os.path.join(data_path, "AirportData.csv"))
-        city_data = pd.read_csv(os.path.join(data_path, "CityData.csv"))
-        country_data = pd.read_csv(os.path.join(data_path, "CountryData.csv"))
-        fleet_data = pd.read_csv(
-            os.path.join(data_path, "FleetDataPassenger.csv")
-        )  # note cargo aircraft are in a seperate file
-        city_pair_data = pd.read_csv(os.path.join(data_path, "DataByCityPair.csv"))
-        price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
-        income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
-
-        # make adjustments to data format where relevant
-        # change country code from 100+ to 0+ to allow for list indexing by code
-        airport_data["Country"] = airport_data["Country"] - 100
-        city_data["Country"] = city_data["Country"] - 100
-        country_data["Number"] = country_data["Number"] - 100
-        # calculate representative ranges for each aircraft type
-        aircraft_data["TypicalRange_m"] = Aircraft.calc_ranges(aircraft_data, run_parameters["StartYear"])
-
-        # sort data where relevant
-        city_data.sort_values(by="CityID", inplace=True)
-        fleet_data.sort_values(by="AircraftID", inplace=True)
-        aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
-
-        # create classes or load from cache
+        # import cached data if relevant
         if run_parameters["CacheOption"] not in ["load", "save", "none"]:
             raise ValueError(f"Invalid CacheOption: {run_parameters['CacheOption']}")
-        initialised_from_cache = False
+        if run_parameters["CacheOption"] in ["load", "save"]:
+            cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
+            if not os.path.exists(cache_folder_path):
+                os.makedirs(cache_folder_path)
+        city_data_cache = False
+        city_lookup_cache = False
+        airlines_cache = False
+        city_pair_data_cache = False
+        airline_fleets_cache = False
+        airline_routes_cache = False
         if run_parameters["CacheOption"] == "load":
             # load from cache
-            cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
             use_cache = input(f"    Loading initialisation data from {cache_folder_path}. Only continue if you trust data in this folder. Continue? (y/n): ").lower()
             while use_cache not in ["y", "n"]:
                 use_cache = input("    Please enter 'y' or 'n': ").lower()
             if use_cache == "y":
                 try:
-                    with open(os.path.join(cache_folder_path, "cities.pkl"), "rb") as f:
-                        cities = pickle.load(f)
-                    with open(os.path.join(cache_folder_path, "airlines.pkl"), "rb") as f:
-                        airlines = pickle.load(f)
-                    with open(os.path.join(cache_folder_path, "routes.pkl"), "rb") as f:
-                        routes = pickle.load(f)
+                    with open(os.path.join(cache_folder_path, "city_data.pkl"), "rb") as f:
+                        city_data = pickle.load(f)
+                        city_data_cache = True
+                except FileNotFoundError:
+                    print("    city_data cache load failed. Reinitialising data...")
+                try:
                     with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "rb") as f:
                         city_lookup = pickle.load(f)
-                    initialised_from_cache = True
+                        city_lookup_cache = True
                 except FileNotFoundError:
-                    print("    Cache load failed. Reinitialising data...")
+                    print("    city_lookup cache load failed. Reinitialising data...")
+                try:
+                    with open(os.path.join(cache_folder_path, "airlines.pkl"), "rb") as f:
+                        airlines = pickle.load(f)
+                        airlines_cache = True
+                except FileNotFoundError:
+                    print("    airlines cache load failed. Reinitialising data...")
+                try:
+                    with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "rb") as f:
+                        city_pair_data = pickle.load(f)
+                        city_pair_data_cache = True
+                except FileNotFoundError:
+                    print("    city_pair_data cache load failed. Reinitialising data...")
+                try:
+                    with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "rb") as f:
+                        airline_fleets = pickle.load(f)
+                        airline_fleets_cache = True
+                except FileNotFoundError:
+                    print("    airline_fleets cache load failed. Reinitialising data...")
+                try:
+                    with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "rb") as f:
+                        airline_routes = pickle.load(f)
+                        airline_routes_cache = True
+                except FileNotFoundError:
+                    print("    airline_routes cache load failed. Reinitialising data...")
             else:
                 print("    Cache load cancelled. Reinitialising data...")
 
-        if not initialised_from_cache:
-            # initialise classes
+        # import, sort and initialise run-specific data if not loaded from cache
+        print(f"    Importing data from {data_path}")
+
+        aircraft_data = pd.read_csv(os.path.join(data_path, "AircraftData.csv"))
+        aircraft_data["TypicalRange_m"] = aircraft.calc_ranges(aircraft_data, run_parameters["StartYear"])
+        aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
+
+        airport_data = pd.read_csv(os.path.join(data_path, "AirportData.csv"))
+        # change country code from 100+ to 0+ to allow for list indexing by code
+        airport_data["Country"] = airport_data["Country"] - 100
+        airport_data.sort_values(by="AirportID", inplace=True)
+
+        country_data = pd.read_csv(os.path.join(data_path, "CountryData.csv"))
+        # change country code from 100+ to 0+ to allow for list indexing by code
+        country_data["Number"] = country_data["Number"] - 100
+
+        price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
+        income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
+        
+        fleet_data = pd.read_csv(
+            os.path.join(data_path, "FleetDataPassenger.csv")
+        )  # note cargo aircraft are in a seperate file
+        fleet_data.sort_values(by="AircraftID", inplace=True)
+        
+        if not city_data_cache or not city_lookup_cache:
+            city_data = pd.read_csv(os.path.join(data_path, "CityData.csv"))
+            # change country code from 100+ to 0+ to allow for list indexing by code
+            city_data["Country"] = city_data["Country"] - 100
+            city_data.sort_values(by="CityID", inplace=True)
+
             print("    Initialising cities...")
-            cities, city_lookup = City.initialise_cities(
-                city_data=city_data,
-                airport_data=airport_data,
+            city_data, city_lookup = city.add_airports_to_cities(
+                city_data, airport_data
             )
+            if run_parameters["CacheOption"] == "save":
+                with open(os.path.join(cache_folder_path, "city_data.pkl"), "wb") as f:
+                    pickle.dump(city_data, f)
+                with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "wb") as f:
+                    pickle.dump(city_lookup, f)
 
+        if not airlines_cache:
             print("    Initialising airlines...")
-            airlines = Airline.initialise_airlines(
-                fleet_data=fleet_data,
-                country_data=country_data,
-                run_parameters=run_parameters,
+            airlines = airline.initialise_airlines(
+                fleet_data,
+                country_data,
+                run_parameters,
             )
+            if run_parameters["CacheOption"] == "save":
+                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
+                    pickle.dump(airlines, f)
 
+        if not city_pair_data_cache:
             print("    Initialising routes...")
-            routes = Route.initialise_routes(
-                cities=cities,
-                city_pair_data=city_pair_data,
-                price_elasticities=price_elasticities,
-                income_elasticities=income_elasticities,
-                population_elasticity=run_parameters["PopulationElasticity"],
+            city_pair_data = pd.read_csv(os.path.join(data_path, "DataByCityPair.csv"))
+            city_pair_data = route.initialise_routes(
+                city_data,
+                city_pair_data,
+                price_elasticities,
+                income_elasticities,
+                run_parameters["PopulationElasticity"],
             )
 
-            # initialise airline fleet assignment
-            for airline in tqdm(
-                airlines,
-                desc="        Fleet assignment",
-                ascii=False,
-                ncols=75,
-            ):
+        if (
+            not airline_fleets_cache
+            or not airline_routes_cache
+            or not city_pair_data_cache
+        ):
+            print("    Initialising fleet assignment...")
+            airline_fleets, airline_routes, city_pair_data = (
                 airline.initialise_fleet_assignment(
-                    routes,
-                    cities,
+                    airlines,
+                    city_pair_data,
+                    city_data,
                     aircraft_data,
                     city_lookup,
                     randomGen,
                     run_parameters["StartYear"]
                 )
+            )
+        if run_parameters["CacheOption"] == "save":
+            with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
+                pickle.dump(city_pair_data, f)
+            with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "wb") as f:
+                pickle.dump(airline_fleets, f)
+            with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
+                pickle.dump(airline_routes, f)
 
-            # save initialisation data to cache
-            if run_parameters["CacheOption"] == "save":
-                cache_folder_path = os.path.join(file_path, run_parameters["CacheDirectory"])
-                print(f"    Saving initialisation data to {cache_folder_path}")
-                if not os.path.exists(cache_folder_path):
-                    os.makedirs(cache_folder_path)
-                with open(os.path.join(cache_folder_path, "cities.pkl"), "wb") as f:
-                    pickle.dump(cities, f)
-                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
-                    pickle.dump(airlines, f)
-                with open(os.path.join(cache_folder_path, "routes.pkl"), "wb") as f:
-                    pickle.dump(routes, f)
-                with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "wb") as f:
-                    pickle.dump(city_lookup, f)
         
         # simulate base year
 
