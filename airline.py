@@ -611,6 +611,7 @@ def optimise_fares(
     demand_iters["base"] = city_pair_data["Total_Demand"]
 
     for iteration in range(maxiters):
+        print(f"        Iteration {iteration+1} of fare optimisation")
         # allow each airline to adjust their prices without knowledge of other airlines' choices
         for _, airline in airlines.iterrows():
             for __, itin in airline_routes[airline["Airline_ID"]].iterrows():
@@ -621,7 +622,7 @@ def optimise_fares(
                 old_fare = itin["fare"]
                 itin["fare"] = maximise_itin_profit(
                     itin,
-                    airline_fleets[airline],
+                    airline_fleets[airline["Airline_ID"]],
                     city_pair_data,
                     city_data,
                     aircraft_data,
@@ -661,8 +662,8 @@ def maximise_itin_profit(
     """
     fare_bounds = (0, 50000)
 
-    origin = city_data.loc[airline_route["origin"]]
-    destination = city_data.loc[airline_route["destination"]]
+    origin = city_data[(city_data["CityID"] == airline_route["origin"])].iloc[0]
+    destination = city_data[(city_data["CityID"] == airline_route["destination"])].iloc[0]
     city_pair = city_pair_data[
         (city_pair_data["OriginCityID"] == airline_route["origin"])
         & (city_pair_data["DestinationCityID"] == airline_route["destination"])
@@ -716,7 +717,7 @@ def itin_profit(
     airline_route["fare"] = fare
 
     # can't sell more tickets than the airline has scheduled
-    annual_itin_demand = demand.update_itinerary_demand(city_pair, airline_route), airline_route["seat_flights_per_year"]
+    annual_itin_demand = demand.update_itinerary_demand(city_pair, airline_route)
     tickets_sold = min([annual_itin_demand, airline_route["seat_flights_per_year"]])
     
     annual_itin_revenue = tickets_sold * airline_route["fare"]

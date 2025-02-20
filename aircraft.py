@@ -239,12 +239,12 @@ def calc_landing_fee(
     """
     Calculate airport fee per landing with a given flight type, aircraft type and number of passengers
     """
-    if city_pair["international"]:
+    if city_pair["International"]:
         flight_type = "International"
     else:
         flight_type = "Domestic"
 
-    mvmt_fee = destination[f"{flight_type}_Fees_USDperMovt"][aircraft["SizeClass"]]
+    mvmt_fee = destination[f"{flight_type}_Fees_USDperMovt"][aircraft["AircraftID"]]
     pax_fee = destination[f"{flight_type}_Fees_USDperPax"] * pax
     fee_perflt = mvmt_fee + pax_fee
     return fee_perflt
@@ -276,7 +276,7 @@ def calc_op_cost(
         n_cc = math.ceil((aircraft["Seats"] * 1.5) / 50)
 
     op_cost_perflt = (
-        n_pilots * aircraft["PilotCost_USDperhr"]
+        n_pilots * aircraft["PilotCost_USDPerPilotPerHour"]
         + n_cc * aircraft["CrewCost_USDPerCrewPerHour"]
         + aircraft["OpCost_USDPerHr"]
     ) * (flight_time_hrs + ground_time_hrs) + (
@@ -291,7 +291,7 @@ def calc_lease_cost(aircraft: pd.Series) -> float:
     Calculate the lease cost per flight
     """
     # note aircraft["FlightsPerYear"] is number of return journeys => equal to number of outbound flights
-    lease_cost_perflt = aircraft["Lease_USDpermonth"] * 12 / aircraft["FlightsPerYear"]
+    lease_cost_perflt = aircraft["Lease_USDperMonth"] * 12 / aircraft["Flights_perYear"]
     return lease_cost_perflt
 
 
@@ -312,7 +312,8 @@ def calc_flight_cost(
     total_seats = 0
     for acft_id in planes:
         aircraft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
-        total_seats += aircraft["Seats"]
+        aircraft_type = aircraft_data.loc[aircraft_data["AircraftID"] == aircraft["SizeClass"]].iloc[0]
+        total_seats += aircraft_type["Seats"]
 
     # split demand between aircraft based on seat capacity and calculate total cost
     annual_cost = 0
