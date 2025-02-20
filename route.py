@@ -61,6 +61,7 @@ def initialise_routes(
     destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
     seat_flights_per_year = np.zeros(n, dtype=np.int32)
     static_demand_factor = np.zeros(n)
+    international = np.zeros(n, dtype=bool)
 
     # show a progress bar because this step can take a while
     for idx, route in tqdm(
@@ -79,6 +80,9 @@ def initialise_routes(
         else:
             origin = city_data.loc[origin_id]
             destination = city_data.loc[destination_id]
+
+            # check if the route is international
+            international[idx] = origin["Country"] != destination["Country"]
 
             # calculate great circle distance between origin and destination cities
             distance[idx] = calc_great_circle_distance(
@@ -134,6 +138,7 @@ def initialise_routes(
     city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
     city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
     city_pair_data["Static_Demand_Factor"] = static_demand_factor
+    city_pair_data["International"] = international.astype('bool')
 
     # remove flagged routes
     city_pair_data.drop(remove_idx, inplace=True)

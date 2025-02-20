@@ -3,14 +3,14 @@ import math
 
 
 def update_od_demand(
-    route: pd.Series,
+    city_pair: pd.Series,
 ) -> float:
     """
     Update the total route demand based on fare and annual static factors.
 
     Parameters
     ----------
-    route : pd.Series
+    city_pair : pd.Series
         A row from the city_pair_data DataFrame
     
     Returns
@@ -19,11 +19,11 @@ def update_od_demand(
     """
     # TODO: add input for national taxes
     fare_factor = 1 + (
-        ((route["Mean_Fare_USD"] - route["Fare_Est"]) / route["Fare_Est"])
-        * route['Price_Elasticity_Route']
+        ((city_pair["Mean_Fare_USD"] - city_pair["Fare_Est"]) / city_pair["Fare_Est"])
+        * city_pair['Price_Elasticity_Route']
     )
     # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
-    demand = route["BaseYearODDemandPax_Est"] * fare_factor * route["Static_Demand_Factor"]
+    demand = math.floor(city_pair["BaseYearODDemandPax_Est"] * fare_factor * city_pair["Static_Demand_Factor"])
     return demand
 
 
@@ -47,7 +47,7 @@ def update_itinerary_demand(
         demand in pax per year for the itinerary
     """
     market_share = airline_route["exp_utility"] / city_pair["exp_utility_sum"]
-    demand = city_pair["Total_Demand"] * market_share
+    demand = math.floor(city_pair["Total_Demand"] * market_share)
     return demand
 
 
@@ -58,6 +58,26 @@ def calc_exp_utility(
     flights_per_year: int,
     fuel_stop: None | int,
 ):
+    """
+    Calculate the e^utility of a flight segment.
+
+    Parameters
+    ----------
+    demand_coefficients : dict
+        Dictionary of demand coefficients
+    fare : float
+        Fare for the segment
+    flight_time_hrs : float
+        Flight time in hours
+    flights_per_year : int
+        Number of flights per year
+    fuel_stop : None | int
+        ID of city where aircraft must stop to refuel, or None if non-stop
+    
+    Returns
+    -------
+    exp_util : float
+    """
     if fuel_stop is None:
         segment_term = demand_coefficients["mu"]
     else:
