@@ -583,6 +583,64 @@ def create_aircraft(
     )
 
 
+def optimise_fares(
+    airlines: pd.DataFrame,
+    airline_routes: list[pd.DataFrame],
+    airline_fleets: list[pd.DataFrame],
+    city_pair_data: pd.DataFrame,
+    city_data: pd.DataFrame,
+    aircraft_data: pd.DataFrame,
+    maxiters: int,
+    demand_tolerance: float,
+) -> tuple[list[pd.DataFrame], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Optimise fares for all airlines, assuming no change in flight schedules
+    """
+    # initialise dataframes tracking convergence
+    fare_iters = pd.DataFrame()
+    fare_iters["base"] = city_pair_data["Mean_Fare_USD"]
+    demand_iters = pd.DataFrame()
+    demand_iters["base"] = city_pair_data["Total_Demand"]
+
+    for iteration in range(maxiters):
+        # allow each airline to adjust their prices without knowledge of other airlines' choices
+        for airline in airlines:
+            for itin in airline_routes[airline]:
+                city_pair = city_pair_data[
+                    (city_pair_data["OriginCityID"] == itin["origin"])
+                    & (city_pair_data["DestinationCityID"] == itin["destination"])
+                ].iloc[0]
+                old_fare = itin["fare"]
+                itin["fare"] = maximise_itin_profit(
+                    itin,
+                    airline_fleets[airline],
+                    city_pair_data,
+                    city_data,
+                    aircraft_data,
+                )
+
+                # update city_pair_data with new mean fare
+                itin_fare_diff = itin["fare"] - old_fare
+                if itin_fare_diff != 0:
+                    prev_mean_fare = city_pair["Mean_Fare_USD"]
+                    city_pair["Mean_Fare_USD"] = (
+                        (prev_mean_fare * city_pair["seat_flights_per_year"])
+                        + (itin_fare_diff * itin["flights_per_year"])
+                    ) / city_pair["seat_flights_per_year"]
+
+        # update demand for all O-D pairs
+        for city_pair in city_pair_data:
+            city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
+
+        # check convergence
+        fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
+        demand_iters[f"iter{iteration}"] = city_pair_data["Total_Demand"]
+        if (abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"]) < demand_tolerance).all():
+            break
+
+    return airline_routes, city_pair_data, fare_iters, demand_iters
+
+
 def maximise_itin_profit(
     airline_route: pd.Series,
     fleet_df: pd.DataFrame,

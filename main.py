@@ -181,6 +181,30 @@ def main():
 
         
         # simulate base year
+        print("    Simulating base year...")
+
+        # arbitrary numbers for testing
+        maxiters = 100
+        demand_tolerance = 100.0
+
+        airline_routes, city_pair_data, fare_iters, demand_iters = airline.optimise_fares(
+            airlines,
+            airline_routes,
+            airline_fleets,
+            city_pair_data,
+            city_data,
+            aircraft_data,
+            maxiters,
+            demand_tolerance,
+        )
+
+        # print fare_iters and demand_iters to file for testing
+        with open(os.path.join(save_folder_path, f"fare_iters_{run_parameters['RunID']}.csv"), "w") as f:
+            for key in fare_iters:
+                f.write(f"{key},{fare_iters[key]}\n")
+        with open(os.path.join(save_folder_path, f"demand_iters_{run_parameters['RunID']}.csv"), "w") as f:
+            for key in demand_iters:
+                f.write(f"{key},{demand_iters[key]}\n")
 
 
         # derive correction factors
