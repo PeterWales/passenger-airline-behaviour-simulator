@@ -4,6 +4,7 @@ import route
 from tqdm import tqdm
 import aircraft as acft
 import demand
+import math
 
 
 def initialise_airlines(
@@ -516,6 +517,7 @@ def create_aircraft(
     not_route_exists = airline_routes[airline_id][
         (airline_routes[airline_id]["origin"] == origin_id)
         & (airline_routes[airline_id]["destination"] == destination_id)
+        & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
     ].empty
     if not_route_exists:
         airline_routes_newrow_1 = {
@@ -578,3 +580,56 @@ def create_aircraft(
         city_pair_data,
         airline_routes,
     )
+
+
+def maximise_itin_profit():
+    """
+    Maximise profit for a given itinerary by adjusting fare
+    """
+
+
+def itin_profit(
+    fare: float,
+    airline_route: pd.Series,
+    city_pair: pd.Series,
+    origin: pd.Series,
+    destination: pd.Series,
+    aircraft_type: pd.Series,
+    aircraft: pd.Series,
+    update_od_demand : bool = False
+):
+    """
+    Calculate profit for a given itinerary (one-way) and fare
+    """
+    # TODO: implement variation in fuel price over time
+
+    # NOTE since this function acts on rows of DataFrames, it does not alter the original DataFrames
+
+    FuelCost_USDperGallon = 1.5  # PLACEHOLDER
+
+    # update city_pair mean fare (weighted by seats available not seats filled)
+    if update_od_demand:
+        total_revenue = city_pair["Mean_Fare_USD"] * city_pair["seat_flights_per_year"]
+        total_revenue += (fare - airline_route["fare"] * airline_route["flights_per_year"])
+        city_pair["Mean_Fare_USD"] = total_revenue / city_pair["seat_flights_per_year"]
+        city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
+
+    # update airline route fare
+    airline_route["fare"] = fare
+
+    # can't sell more tickets than the airline has scheduled
+    itin_demand = min([demand.update_itinerary_demand(city_pair, airline_route), airline_route["seat_flights_per_year"]])
+    pax = math.floor(itin_demand * airline_route["flights_per_year"])
+
+    revenue = itin_demand * airline_route["fare"]
+    costs = acft.calc_flight_cost(
+        aircraft_type,
+        aircraft,
+        city_pair,
+        origin,
+        destination,
+        pax,
+        FuelCost_USDperGallon,
+    )  # note depends on number of seats sold due to weight
+    profit = revenue - costs
+    return profit
