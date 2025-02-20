@@ -446,6 +446,13 @@ def create_aircraft(
     inbound_route: pd.Series,
     demand_coefficients: dict[str, float],
 ):
+    # check if route already exists in airline_routes
+    not_route_exists = airline_routes[airline_id][
+        (airline_routes[airline_id]["origin"] == origin_id)
+        & (airline_routes[airline_id]["destination"] == destination_id)
+        & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
+    ].empty
+
     aircraft_id_list.append(aircraft_id)
     aircraft_size_list.append(aircraft_size)
     aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
@@ -477,18 +484,32 @@ def create_aircraft(
     flight_time_hrs = (
         outbound_route["Great_Circle_Distance_m"] / (aircraft["CruiseV_ms"] * 3600)
     )  # could make this more accurate by taking average of different aircraft rather than just the last one
+    if not_route_exists:
+        outbound_flights_per_year = flights_per_year_list[-1]
+    else:
+        outbound_mask = (
+            (airline_routes[airline_id]["origin"] == origin_id) & 
+            (airline_routes[airline_id]["destination"] == destination_id)
+        )
+        inbound_mask = (
+            (airline_routes[airline_id]["origin"] == destination_id) & 
+            (airline_routes[airline_id]["destination"] == origin_id)
+        )
+        outbound_flights_per_year = airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] + flights_per_year_list[-1]
+    inbound_flights_per_year = outbound_flights_per_year
+
     outbound_exp_utility = demand.calc_exp_utility(
         demand_coefficients,
         outbound_route["Fare_Est"],
         flight_time_hrs,
-        airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] + flights_per_year_list[-1],
+        outbound_flights_per_year,
         fuel_stop,
     )
     inbound_exp_utility = demand.calc_exp_utility(
         demand_coefficients,
         inbound_route["Fare_Est"],
         flight_time_hrs,
-        airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] + flights_per_year_list[-1],
+        inbound_flights_per_year,
         fuel_stop,
     )
 
@@ -515,11 +536,6 @@ def create_aircraft(
     ] += inbound_exp_utility
 
     # update airline-specific route dataframe
-    not_route_exists = airline_routes[airline_id][
-        (airline_routes[airline_id]["origin"] == origin_id)
-        & (airline_routes[airline_id]["destination"] == destination_id)
-        & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
-    ].empty
     if not_route_exists:
         airline_routes_newrow_1 = {
             "origin": [origin_id],
@@ -547,15 +563,6 @@ def create_aircraft(
             new_df_2
         ], ignore_index=True)
     else:
-        outbound_mask = (
-            (airline_routes[airline_id]["origin"] == origin_id) & 
-            (airline_routes[airline_id]["destination"] == destination_id)
-        )
-        inbound_mask = (
-            (airline_routes[airline_id]["origin"] == destination_id) & 
-            (airline_routes[airline_id]["destination"] == origin_id)
-        )
-
         airline_routes[airline_id].loc[outbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
         airline_routes[airline_id].loc[inbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
 
