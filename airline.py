@@ -5,6 +5,7 @@ from tqdm import tqdm
 import aircraft as acft
 import demand
 import math
+from scipy.optimize import minimize_scalar
 
 
 def initialise_airlines(
@@ -582,10 +583,41 @@ def create_aircraft(
     )
 
 
-def maximise_itin_profit():
+def maximise_itin_profit(
+    airline_route: pd.Series,
+    fleet_df: pd.DataFrame,
+    city_pair_data: pd.DataFrame,
+    city_data: pd.DataFrame,
+    aircraft_data: pd.DataFrame,
+) -> float:
     """
     Maximise profit for a given itinerary by adjusting fare
     """
+    fare_bounds = (0, 50000)
+
+    origin = city_data.loc[airline_route["origin"]]
+    destination = city_data.loc[airline_route["destination"]]
+    city_pair = city_pair_data[
+        (city_pair_data["OriginCityID"] == airline_route["origin"])
+        & (city_pair_data["DestinationCityID"] == airline_route["destination"])
+    ].iloc[0]
+
+    # Minimise negative profit
+    def objective(fare):
+        return -itin_profit(
+            fare,
+            airline_route,
+            city_pair,
+            origin,
+            destination,
+            fleet_df,
+            aircraft_data,
+            update_od_demand=False
+        )
+
+    result = minimize_scalar(objective, bounds=fare_bounds, method="bounded")
+    optimal_fare = result.x
+    return optimal_fare
 
 
 def itin_profit(
@@ -594,8 +626,8 @@ def itin_profit(
     city_pair: pd.Series,
     origin: pd.Series,
     destination: pd.Series,
-    aircraft_type: pd.Series,
-    aircraft: pd.Series,
+    fleet_data: pd.DataFrame,
+    aircraft_data: pd.DataFrame,
     update_od_demand : bool = False
 ):
     """
@@ -618,18 +650,20 @@ def itin_profit(
     airline_route["fare"] = fare
 
     # can't sell more tickets than the airline has scheduled
-    itin_demand = min([demand.update_itinerary_demand(city_pair, airline_route), airline_route["seat_flights_per_year"]])
-    pax = math.floor(itin_demand * airline_route["flights_per_year"])
+    annual_itin_demand = demand.update_itinerary_demand(city_pair, airline_route), airline_route["seat_flights_per_year"]
+    tickets_sold = min([annual_itin_demand, airline_route["seat_flights_per_year"]])
+    
+    annual_itin_revenue = tickets_sold * airline_route["fare"]
 
-    revenue = itin_demand * airline_route["fare"]
-    costs = acft.calc_flight_cost(
-        aircraft_type,
-        aircraft,
+    annual_itin_cost = acft.calc_flight_cost(
+        airline_route,
+        fleet_data,
+        aircraft_data,
         city_pair,
         origin,
         destination,
-        pax,
+        annual_itin_demand,
         FuelCost_USDperGallon,
     )  # note depends on number of seats sold due to weight
-    profit = revenue - costs
-    return profit
+    annual_itin_profit = annual_itin_revenue - annual_itin_cost
+    return annual_itin_profit

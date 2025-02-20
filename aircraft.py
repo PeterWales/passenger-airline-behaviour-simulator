@@ -296,18 +296,39 @@ def calc_lease_cost(aircraft: pd.Series) -> float:
 
 
 def calc_flight_cost(
-    aircraft_type: pd.Series,
-    aircraft: pd.Series,
+    # TODO: split this into fixed and variable costs
+    airline_route: pd.Series,
+    fleet_df: pd.DataFrame,
+    aircraft_data: pd.DataFrame,
     city_pair: pd.Series,
     origin: pd.Series,
     destination: pd.Series,
-    pax: int,
+    annual_itin_demand: int,
     FuelCost_USDperGallon: float,
 ) -> float:
-    cost = (
-        calc_op_cost(aircraft_type, city_pair, origin, destination)
-        + calc_landing_fee(city_pair, destination, aircraft_type, pax)
-        + calc_fuel_cost(aircraft_type, aircraft, city_pair, pax, FuelCost_USDperGallon)
-        + calc_lease_cost(aircraft)
-    )
-    return cost
+    planes = airline_route["aircraft_ids"]
+
+    # calculate total seats for all aircraft on route
+    total_seats = 0
+    for acft_id in planes:
+        aircraft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
+        total_seats += aircraft["Seats"]
+
+    # split demand between aircraft based on seat capacity and calculate total cost
+    annual_cost = 0
+    for acft_id in planes:
+        aircraft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
+        aircraft_type = aircraft_data.loc[aircraft_data["AircraftID"] == aircraft["SizeClass"]].iloc[0]
+
+        itin_demand_share = aircraft_type["Seats"] * annual_itin_demand / total_seats
+        pax_perflt_share = math.floor(itin_demand_share / aircraft["Flights_perYear"])
+        pax = min([pax_perflt_share, aircraft_type["Seats"]])
+
+        cost_perflt = (
+            calc_op_cost(aircraft_type, city_pair, origin, destination)
+            + calc_landing_fee(city_pair, destination, aircraft_type, pax)
+            + calc_fuel_cost(aircraft_type, aircraft, city_pair, pax, FuelCost_USDperGallon)
+            + calc_lease_cost(aircraft)
+        )
+        annual_cost += cost_perflt * aircraft["Flights_perYear"]
+    return annual_cost
