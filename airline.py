@@ -173,6 +173,7 @@ def initialise_fleet_assignment(
         {
             "origin": pd.Series(dtype="int"),
             "destination": pd.Series(dtype="int"),
+            "fuel_stop": pd.Series(dtype="int"),
             "fare": pd.Series(dtype="float"),
             "aircraft_ids": pd.Series(dtype="object"),
             "flights_per_year": pd.Series(dtype="int"),
@@ -611,8 +612,8 @@ def optimise_fares(
 
     for iteration in range(maxiters):
         # allow each airline to adjust their prices without knowledge of other airlines' choices
-        for airline in airlines:
-            for itin in airline_routes[airline]:
+        for _, airline in airlines.iterrows():
+            for __, itin in airline_routes[airline["Airline_ID"]].iterrows():
                 city_pair = city_pair_data[
                     (city_pair_data["OriginCityID"] == itin["origin"])
                     & (city_pair_data["DestinationCityID"] == itin["destination"])
