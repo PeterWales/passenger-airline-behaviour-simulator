@@ -4,8 +4,8 @@ import route
 from tqdm import tqdm
 import aircraft as acft
 import demand
-import math
 from scipy.optimize import minimize_scalar
+import os
 
 
 def initialise_airlines(
@@ -274,7 +274,7 @@ def initialise_fleet_assignment(
             
             seats = total_seats * (route_RPKs / possible_RPKs)
 
-            for _, aircraft in aircraft_data.iterrows():
+            for __, aircraft in aircraft_data.iterrows():
                 if seats <= (smallest_ac * min_load_factor):
                     break
                 aircraft_size = aircraft["AircraftID"]
@@ -600,6 +600,7 @@ def optimise_fares(
     aircraft_data: pd.DataFrame,
     maxiters: int,
     demand_tolerance: float,
+    save_folder_path: str
 ) -> tuple[list[pd.DataFrame], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Optimise fares for all airlines, assuming no change in flight schedules
@@ -638,12 +639,17 @@ def optimise_fares(
                     ) / city_pair["seat_flights_per_year"]
 
         # update demand for all O-D pairs
-        for city_pair in city_pair_data:
+        for _, city_pair in city_pair_data.iterrows():
             city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
 
         # check convergence
         fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
         demand_iters[f"iter{iteration}"] = city_pair_data["Total_Demand"]
+
+        # write new column to existing file
+        fare_iters.to_csv(os.path.join(save_folder_path, "fare_iters.csv"), index=False)
+        demand_iters.to_csv(os.path.join(save_folder_path, "demand_iters.csv"), index=False)
+
         if (abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"]) < demand_tolerance).all():
             break
 

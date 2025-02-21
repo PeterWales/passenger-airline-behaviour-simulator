@@ -198,14 +198,6 @@ def main():
             demand_tolerance,
         )
 
-        # print fare_iters and demand_iters to file for testing
-        with open(os.path.join(save_folder_path, f"fare_iters_{run_parameters['RunID']}.csv"), "w") as f:
-            for key in fare_iters:
-                f.write(f"{key},{fare_iters[key]}\n")
-        with open(os.path.join(save_folder_path, f"demand_iters_{run_parameters['RunID']}.csv"), "w") as f:
-            for key in demand_iters:
-                f.write(f"{key},{demand_iters[key]}\n")
-
 
         # derive correction factors
 
