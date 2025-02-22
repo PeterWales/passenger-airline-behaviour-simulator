@@ -45,48 +45,42 @@ def main():
         airline_routes_cache = False
         if run_parameters["CacheOption"] == "load":
             # load from cache
-            use_cache = input(f"    Loading initialisation data from {cache_folder_path}. Only continue if you trust data in this folder. Continue? (y/n): ").lower()
-            while use_cache not in ["y", "n"]:
-                use_cache = input("    Please enter 'y' or 'n': ").lower()
-            if use_cache == "y":
-                try:
-                    with open(os.path.join(cache_folder_path, "city_data.pkl"), "rb") as f:
-                        city_data = pickle.load(f)
-                        city_data_cache = True
-                except FileNotFoundError:
-                    print("    city_data cache load failed. Reinitialising data...")
-                try:
-                    with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "rb") as f:
-                        city_lookup = pickle.load(f)
-                        city_lookup_cache = True
-                except FileNotFoundError:
-                    print("    city_lookup cache load failed. Reinitialising data...")
-                try:
-                    with open(os.path.join(cache_folder_path, "airlines.pkl"), "rb") as f:
-                        airlines = pickle.load(f)
-                        airlines_cache = True
-                except FileNotFoundError:
-                    print("    airlines cache load failed. Reinitialising data...")
-                try:
-                    with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "rb") as f:
-                        city_pair_data = pickle.load(f)
-                        city_pair_data_cache = True
-                except FileNotFoundError:
-                    print("    city_pair_data cache load failed. Reinitialising data...")
-                try:
-                    with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "rb") as f:
-                        airline_fleets = pickle.load(f)
-                        airline_fleets_cache = True
-                except FileNotFoundError:
-                    print("    airline_fleets cache load failed. Reinitialising data...")
-                try:
-                    with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "rb") as f:
-                        airline_routes = pickle.load(f)
-                        airline_routes_cache = True
-                except FileNotFoundError:
-                    print("    airline_routes cache load failed. Reinitialising data...")
-            else:
-                print("    Cache load cancelled. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "city_data.pkl"), "rb") as f:
+                    city_data = pickle.load(f)
+                    city_data_cache = True
+            except FileNotFoundError:
+                print("    city_data cache load failed. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "rb") as f:
+                    city_lookup = pickle.load(f)
+                    city_lookup_cache = True
+            except FileNotFoundError:
+                print("    city_lookup cache load failed. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "airlines.pkl"), "rb") as f:
+                    airlines = pickle.load(f)
+                    airlines_cache = True
+            except FileNotFoundError:
+                print("    airlines cache load failed. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "rb") as f:
+                    city_pair_data = pickle.load(f)
+                    city_pair_data_cache = True
+            except FileNotFoundError:
+                print("    city_pair_data cache load failed. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "rb") as f:
+                    airline_fleets = pickle.load(f)
+                    airline_fleets_cache = True
+            except FileNotFoundError:
+                print("    airline_fleets cache load failed. Reinitialising data...")
+            try:
+                with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "rb") as f:
+                    airline_routes = pickle.load(f)
+                    airline_routes_cache = True
+            except FileNotFoundError:
+                print("    airline_routes cache load failed. Reinitialising data...")
 
         # import, sort and initialise run-specific data if not loaded from cache
         print(f"    Importing data from {data_path}")

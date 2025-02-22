@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import route
-from tqdm import tqdm
 import aircraft as acft
 import demand
 from scipy.optimize import minimize_scalar
@@ -184,13 +183,7 @@ def initialise_fleet_assignment(
 
     # iterate over all airlines
     # show a progress bar because this step can take a while
-    for _, airline in tqdm(
-        airlines.iterrows(),
-        total=airlines.shape[0],
-        desc="        Airline fleets initialised",
-        ascii=False,
-        ncols=75,
-    ):
+    for _, airline in airlines.iterrows():
         airline_id = airline["Airline_ID"]
 
         # calculate total base RPKs for all routes the airline can operate (assume airlines can only run routes to/from their home country)
