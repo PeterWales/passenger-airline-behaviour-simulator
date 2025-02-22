@@ -650,8 +650,9 @@ def optimise_fares(
         fare_iters.to_csv(os.path.join(save_folder_path, "fare_iters.csv"), index=False)
         demand_iters.to_csv(os.path.join(save_folder_path, "demand_iters.csv"), index=False)
 
-        if (abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"]) < demand_tolerance).all():
-            break
+        if iteration > 0:
+            if (abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"]) < demand_tolerance).all():
+                break
 
     return airline_routes, city_pair_data, fare_iters, demand_iters
 
