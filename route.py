@@ -54,6 +54,10 @@ def initialise_routes(
     n = len(city_pair_data)
     remove_idx = []
     distance = np.full(n, fill_value=0, dtype=np.float32)
+    origin_long = np.full(n, fill_value=0, dtype=np.float32)
+    origin_lat = np.full(n, fill_value=0, dtype=np.float32)
+    destination_long = np.full(n, fill_value=0, dtype=np.float32)
+    destination_lat = np.full(n, fill_value=0, dtype=np.float32)
     price_elasticity_route = np.full(n, fill_value=0, dtype=np.float32)
     price_elasticity_national = np.full(n, fill_value=0, dtype=np.float32)
     origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
@@ -90,6 +94,12 @@ def initialise_routes(
                 destination["Latitude"],
                 destination["Longitude"]
             )
+
+            # store city coordinates to make plotting easier
+            origin_lat[idx] = origin["Latitude"]
+            origin_long[idx] = origin["Longitude"]
+            destination_lat[idx] = destination["Latitude"]
+            destination_long[idx] = destination["Longitude"]
 
             # retrieve the relevant price_elasticity of demand - note OD_1 <= OD_2
             price_elasticities_idx = price_elasticities.loc[
@@ -131,6 +141,10 @@ def initialise_routes(
             )
     
     city_pair_data['Great_Circle_Distance_m'] = distance.astype('float32')
+    city_pair_data['Origin_Latitude'] = origin_lat.astype('float32')
+    city_pair_data['Origin_Longitude'] = origin_long.astype('float32')
+    city_pair_data['Destination_Latitude'] = destination_lat.astype('float32')
+    city_pair_data['Destination_Longitude'] = destination_long.astype('float32')
     city_pair_data['Price_Elasticity_Route'] = price_elasticity_route.astype('float32')
     city_pair_data['Price_Elasticity_National'] = price_elasticity_national.astype('float32')
     city_pair_data['Origin_Income_Elasticity'] = origin_income_elasticity.astype('float32')

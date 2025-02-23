@@ -600,8 +600,21 @@ def optimise_fares(
     """
     # initialise dataframes tracking convergence
     fare_iters = pd.DataFrame()
+    fare_iters["Origin"] = city_pair_data["OriginCityID"]
+    fare_iters["Destination"] = city_pair_data["DestinationCityID"]
+    fare_iters["Origin_Latitude"] = city_pair_data["Origin_Latitude"]
+    fare_iters["Origin_Longitude"] = city_pair_data["Origin_Longitude"]
+    fare_iters["Destination_Latitude"] = city_pair_data["Destination_Latitude"]
+    fare_iters["Destination_Longitude"] = city_pair_data["Destination_Longitude"]
     fare_iters["base"] = city_pair_data["Mean_Fare_USD"]
+
     demand_iters = pd.DataFrame()
+    demand_iters["Origin"] = city_pair_data["OriginCityID"]
+    demand_iters["Destination"] = city_pair_data["DestinationCityID"]
+    demand_iters["Origin_Latitude"] = city_pair_data["Origin_Latitude"]
+    demand_iters["Origin_Longitude"] = city_pair_data["Origin_Longitude"]
+    demand_iters["Destination_Latitude"] = city_pair_data["Destination_Latitude"]
+    demand_iters["Destination_Longitude"] = city_pair_data["Destination_Longitude"]
     demand_iters["base"] = city_pair_data["Total_Demand"]
 
     for iteration in range(maxiters):
@@ -623,10 +636,16 @@ def optimise_fares(
                 )
 
                 # update city_pair_data with new mean fare
+                # can update in place because these fare values are only used for overall O-D demand calculation
                 itin_fare_diff = itin["fare"] - old_fare
                 if itin_fare_diff != 0:
                     prev_mean_fare = city_pair["Mean_Fare_USD"]
-                    city_pair["Mean_Fare_USD"] = (
+
+                    city_pair_data.loc[
+                        (city_pair_data["OriginCityID"] == itin["origin"])
+                        & (city_pair_data["DestinationCityID"] == itin["destination"]),
+                        "Mean_Fare_USD"
+                    ] = (
                         (prev_mean_fare * city_pair["seat_flights_per_year"])
                         + (itin_fare_diff * itin["flights_per_year"])
                     ) / city_pair["seat_flights_per_year"]
@@ -635,16 +654,22 @@ def optimise_fares(
         for _, city_pair in city_pair_data.iterrows():
             city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
 
-        # check convergence
+        # write new columns to dataframes
         fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
         demand_iters[f"iter{iteration}"] = city_pair_data["Total_Demand"]
 
-        # write new column to existing file
+        # write dataframes to files
         fare_iters.to_csv(os.path.join(save_folder_path, "fare_iters.csv"), index=False)
         demand_iters.to_csv(os.path.join(save_folder_path, "demand_iters.csv"), index=False)
 
+        # check convergence
         if iteration > 0:
-            if (abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"]) < demand_tolerance).all():
+            diff = abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"])
+            max_diff = diff.max()
+            print(f"        Maximum difference: {max_diff}")
+            
+            if max_diff < demand_tolerance:
+                print(f"        Converged after {iteration} iterations")
                 break
 
     return airline_routes, city_pair_data, fare_iters, demand_iters
