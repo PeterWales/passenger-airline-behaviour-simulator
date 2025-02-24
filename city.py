@@ -111,7 +111,10 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
                 # check for edge case where a city has airports either side of the 180deg longitude line
                 apt_longitude = float(airport["Longitude"])
-                if apt_longitude * long_sum < 0.0:
+                if (
+                    apt_longitude * long_sum < 0.0
+                    and (apt_longitude > 90.0 or apt_longitude < -90.0)
+                ):
                     if apt_longitude < 0.0:
                         apt_longitude += 360.0
                     else:

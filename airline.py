@@ -687,8 +687,8 @@ def maximise_itin_profit(
     """
     fare_bounds = (0, 50000)
 
-    origin = city_data[(city_data["CityID"] == airline_route["origin"])].iloc[0]
-    destination = city_data[(city_data["CityID"] == airline_route["destination"])].iloc[0]
+    origin = city_data.loc[airline_route["origin"]]
+    destination = city_data.loc[airline_route["destination"]]
     city_pair = city_pair_data[
         (city_pair_data["OriginCityID"] == airline_route["origin"])
         & (city_pair_data["DestinationCityID"] == airline_route["destination"])
