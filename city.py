@@ -190,7 +190,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
             if city_longitude > 180.0:
                 city_longitude -= 360.0
 
-        city_lookup[city["Country"]].append(city["CityID"])
+        city_lookup[city["Country"]].append(idx)
 
         latitude.append(lat_sum / capacity_sum)
         longitude.append(city_longitude)
