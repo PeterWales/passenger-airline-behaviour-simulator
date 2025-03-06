@@ -117,8 +117,6 @@ def main():
                 city_data, airport_data
             )
             if run_parameters["CacheOption"] == "save":
-                with open(os.path.join(cache_folder_path, "city_data.pkl"), "wb") as f:
-                    pickle.dump(city_data, f)
                 with open(os.path.join(cache_folder_path, "city_lookup.pkl"), "wb") as f:
                     pickle.dump(city_lookup, f)
 
@@ -148,6 +146,7 @@ def main():
             not airline_fleets_cache
             or not airline_routes_cache
             or not city_pair_data_cache
+            or not city_data_cache
         ):
             print("    Initialising fleet assignment...")
             (
@@ -171,13 +170,30 @@ def main():
             print("    Checking airport capacity limits...")
             if len(capacity_flag_list) > 0:
                 print(f"    Limits exceeded for {len(capacity_flag_list)} city-pair(s). Reassigning fleets...")
-                city.enforce_capacity()
+                (
+                    airline_fleets,
+                    airline_routes,
+                    city_pair_data,
+                    city_data
+                ) = city.enforce_capacity(
+                    airlines,
+                    airline_fleets,
+                    airline_routes,
+                    aircraft_data,
+                    city_pair_data,
+                    city_data,
+                    city_lookup,
+                    capacity_flag_list,
+                    demand_coefficients
+                )
             else:
                 print("    No capacity limits exceeded.")
 
         if run_parameters["CacheOption"] == "save":
             with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
                 pickle.dump(city_pair_data, f)
+            with open(os.path.join(cache_folder_path, "city_data.pkl"), "wb") as f:
+                pickle.dump(city_data, f)
             with open(os.path.join(cache_folder_path, "airline_fleets.pkl"), "wb") as f:
                 pickle.dump(airline_fleets, f)
             with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
