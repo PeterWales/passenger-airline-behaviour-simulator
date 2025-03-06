@@ -150,7 +150,13 @@ def main():
             or not city_pair_data_cache
         ):
             print("    Initialising fleet assignment...")
-            airline_fleets, airline_routes, city_pair_data = (
+            (
+                airline_fleets,
+                airline_routes,
+                city_pair_data,
+                city_data,
+                capacity_flag_list,
+            ) = (
                 airline.initialise_fleet_assignment(
                     airlines,
                     city_pair_data,
@@ -162,6 +168,13 @@ def main():
                     demand_coefficients,
                 )
             )
+            print("    Checking airport capacity limits...")
+            if len(capacity_flag_list) > 0:
+                print(f"    Limits exceeded for {len(capacity_flag_list)} city-pair(s). Reassigning fleets...")
+                city.enforce_capacity()
+            else:
+                print("    No capacity limits exceeded.")
+
         if run_parameters["CacheOption"] == "save":
             with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
                 pickle.dump(city_pair_data, f)

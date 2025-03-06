@@ -41,9 +41,6 @@ def initialise_routes(
         "high": 14005
     }
 
-    # set CityID as index for faster lookups
-    city_data.set_index('CityID', inplace=True)
-
     # initialise whole columns
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]

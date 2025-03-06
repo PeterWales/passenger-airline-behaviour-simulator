@@ -130,7 +130,13 @@ def initialise_fleet_assignment(
     randomGen: np.random.Generator,
     year: int,
     demand_coefficients: dict[str, float],
-) -> pd.DataFrame:
+) -> tuple[
+    list[pd.DataFrame],
+    list[pd.DataFrame],
+    pd.DataFrame,
+    pd.DataFrame,
+    list[int]
+]:
     """
     Assign aircraft to routes based on base demand, aircraft range and runway required
     Updates airlines and city_pair_data DataFrames in place.
@@ -151,12 +157,16 @@ def initialise_fleet_assignment(
         random number generator
     year : int
         calendar year
+    demand_coefficients : dict
+        dictionary of demand coefficients
     
     Returns
     -------
     airline_fleets : list[pd.DataFrame]
     airline_routes : list[pd.DataFrame]
     city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    capacity_flag_list : list
     """
     # TODO: enable EU airlines to operate routes between all EU countries
     # TODO: move aircraft creation and following lines into a function to avoid code duplication
@@ -246,6 +256,7 @@ def initialise_fleet_assignment(
         destination_id_list = []
         fuel_stop_list = []
         flights_per_year_list = []
+        capacity_flag_list = []
 
         # assign aircraft seat capacity by base demand starting with the largest aircraft on the longest routes
         distances.sort(key=lambda x: x[2], reverse=True)
@@ -303,7 +314,9 @@ def initialise_fleet_assignment(
                                     fuel_stop_list,
                                     flights_per_year_list,
                                     city_pair_data,
+                                    city_data,
                                     airline_routes,
+                                    capacity_flag_list,
                                 ) = create_aircraft(
                                     aircraft_id_list,
                                     aircraft_id,
@@ -329,6 +342,7 @@ def initialise_fleet_assignment(
                                     outbound_route,
                                     inbound_route,
                                     demand_coefficients,
+                                    capacity_flag_list,
                                 )
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
@@ -366,7 +380,9 @@ def initialise_fleet_assignment(
                                         fuel_stop_list,
                                         flights_per_year_list,
                                         city_pair_data,
+                                        city_data,
                                         airline_routes,
+                                        capacity_flag_list,
                                     ) = create_aircraft(
                                         aircraft_id_list,
                                         aircraft_id,
@@ -392,6 +408,7 @@ def initialise_fleet_assignment(
                                         outbound_route,
                                         inbound_route,
                                         demand_coefficients,
+                                        capacity_flag_list,
                                     )
 
                         else:
@@ -411,7 +428,7 @@ def initialise_fleet_assignment(
 
         airline_fleets[airline_id] = fleet_df
 
-    return airline_fleets, airline_routes, city_pair_data
+    return airline_fleets, airline_routes, city_pair_data, city_data, capacity_flag_list
 
 
 def create_aircraft(
@@ -439,7 +456,10 @@ def create_aircraft(
     outbound_route: pd.Series,
     inbound_route: pd.Series,
     demand_coefficients: dict[str, float],
+    capacity_flag_list: list,
 ):
+    op_hrs_per_year = 6205  # =17*365 (assume airports are closed between 11pm and 6am)
+    
     # check if route already exists in airline_routes
     not_route_exists = airline_routes[airline_id][
         (airline_routes[airline_id]["origin"] == origin_id)
@@ -474,6 +494,21 @@ def create_aircraft(
         )
     )
 
+    city_data.loc[origin_id, "Movts_perHr"] += 2 * flights_per_year_list[-1] / op_hrs_per_year  # 2* since each flight is return
+    city_data.loc[destination_id, "Movts_perHr"] += 2 * flights_per_year_list[-1] / op_hrs_per_year
+
+    # flag city if capacity limit exceeded
+    if (
+        (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
+        and (origin_id not in capacity_flag_list)
+    ):
+        capacity_flag_list.append(origin_id)
+    if (
+        (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
+        and (destination_id not in capacity_flag_list)
+    ):
+        capacity_flag_list.append(destination_id)
+
     seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
     flight_time_hrs = (
         outbound_route["Great_Circle_Distance_m"] / (aircraft["CruiseV_ms"] * 3600)
@@ -495,14 +530,18 @@ def create_aircraft(
     outbound_exp_utility = demand.calc_exp_utility(
         demand_coefficients,
         outbound_route["Fare_Est"],
-        flight_time_hrs,
+        flight_time_hrs
+        + city_data.loc[origin_id, "Taxi_Out_mins"]
+        + city_data.loc[destination_id, "Taxi_In_mins"],
         outbound_flights_per_year,
         fuel_stop,
     )
     inbound_exp_utility = demand.calc_exp_utility(
         demand_coefficients,
         inbound_route["Fare_Est"],
-        flight_time_hrs,
+        flight_time_hrs
+        + city_data.loc[destination_id, "Taxi_Out_mins"]
+        + city_data.loc[origin_id, "Taxi_In_mins"],
         inbound_flights_per_year,
         fuel_stop,
     )
@@ -580,7 +619,9 @@ def create_aircraft(
         fuel_stop_list,
         flights_per_year_list,
         city_pair_data,
+        city_data,
         airline_routes,
+        capacity_flag_list,
     )
 
 

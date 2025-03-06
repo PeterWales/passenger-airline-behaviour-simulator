@@ -78,17 +78,20 @@ def calc_exp_utility(
     -------
     exp_util : float
     """
-    if fuel_stop is None:
-        segment_term = demand_coefficients["mu"]
+    if flights_per_year == 0:
+        exp_utility = 0
     else:
-        segment_term = 2*demand_coefficients["mu"]
+        if fuel_stop is None:
+            segment_term = demand_coefficients["mu"]
+        else:
+            segment_term = 2*demand_coefficients["mu"]
 
-    utility = (
-        demand_coefficients["theta"]*fare
-        + demand_coefficients["k"]*flight_time_hrs
-        + demand_coefficients["lambda"]*math.log(flights_per_year)
-        + segment_term
-    )
+        utility = (
+            demand_coefficients["theta"]*fare
+            + demand_coefficients["k"]*flight_time_hrs
+            + demand_coefficients["lambda"]*math.log(flights_per_year)
+            + segment_term
+        )
 
-    exp_utility = math.exp(utility)
+        exp_utility = math.exp(utility)
     return exp_utility
