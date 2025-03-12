@@ -243,9 +243,9 @@ def initialise_fleet_assignment(
         total_seats = 0
         smallest_ac = np.inf
         for aircraft_type, n_aircraft_type in enumerate(airline["n_Aircraft"]):
-            total_seats += n_aircraft_type * aircraft_data.at[aircraft_type, "Seats"]
-            if (n_aircraft_type > 0) and (aircraft_data.at[aircraft_type, "Seats"] < smallest_ac):
-                smallest_ac = aircraft_data.at[aircraft_type, "Seats"]
+            total_seats += n_aircraft_type * aircraft_data.loc[aircraft_type, "Seats"]
+            if (n_aircraft_type > 0) and (aircraft_data.loc[aircraft_type, "Seats"] < smallest_ac):
+                smallest_ac = aircraft_data.loc[aircraft_type, "Seats"]
 
         aircraft_id_list = []
         aircraft_size_list = []
@@ -281,7 +281,7 @@ def initialise_fleet_assignment(
             for __, aircraft in aircraft_data.iterrows():
                 if seats <= (smallest_ac * min_load_factor):
                     break
-                aircraft_size = aircraft["AircraftID"]
+                aircraft_size = aircraft.name
                 if aircraft_avail[aircraft_size] > 0:
                     # check origin and destination runways are long enough
                     if (
@@ -301,7 +301,7 @@ def initialise_fleet_assignment(
 
                                 # create aircraft and assign to route, randomise age
                                 aircraft_id += 1
-                                fuel_stop = None
+                                fuel_stop = -1
 
                                 (
                                     aircraft_id_list,
@@ -358,7 +358,7 @@ def initialise_fleet_assignment(
                                 )
                             )
 
-                            if fuel_stop is not None:  # None if route not possible wih a stop for that aircraft
+                            if not (fuel_stop == -1):  # -1 if route not possible with a stop for that aircraft
                                 while(
                                     (seats / aircraft["Seats"] > min_load_factor)
                                     and (aircraft_avail[aircraft_size] > 0)
@@ -447,7 +447,7 @@ def create_aircraft(
     destination_id_list: list,
     destination_id: int,
     fuel_stop_list: list,
-    fuel_stop: int | None,
+    fuel_stop: int,
     flights_per_year_list: list,
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
@@ -458,7 +458,7 @@ def create_aircraft(
     demand_coefficients: dict[str, float],
     capacity_flag_list: list,
 ):
-    op_hrs_per_year = 6205  # =17*365 (assume airports are closed between 11pm and 6am)
+    op_hrs_per_year = 6205.0  # =17*365 (assume airports are closed between 11pm and 6am)
     
     # check if route already exists in airline_routes
     not_route_exists = airline_routes[airline_id][
@@ -476,7 +476,7 @@ def create_aircraft(
     destination_id_list.append(destination_id)
     fuel_stop_list.append(fuel_stop)
 
-    if fuel_stop is None:
+    if fuel_stop == -1:
         fuel_stop_series = None
     else:
         fuel_stop_series = city_data.loc[fuel_stop]
@@ -494,8 +494,8 @@ def create_aircraft(
         )
     )
 
-    city_data.loc[origin_id, "Movts_perHr"] += 2 * flights_per_year_list[-1] / op_hrs_per_year  # 2* since each flight is return
-    city_data.loc[destination_id, "Movts_perHr"] += 2 * flights_per_year_list[-1] / op_hrs_per_year
+    city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 2* since each flight is return
+    city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year
 
     # flag city if capacity limit exceeded
     if (
@@ -524,7 +524,7 @@ def create_aircraft(
             (airline_routes[airline_id]["origin"] == destination_id) & 
             (airline_routes[airline_id]["destination"] == origin_id)
         )
-        outbound_flights_per_year = airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] + flights_per_year_list[-1]
+        outbound_flights_per_year = airline_routes[airline_id].loc[outbound_mask, "flights_per_year"].iloc[0] + flights_per_year_list[-1]
     inbound_flights_per_year = outbound_flights_per_year
 
     outbound_exp_utility = demand.calc_exp_utility(
@@ -550,22 +550,22 @@ def create_aircraft(
     city_pair_data.loc[
         (city_pair_data["OriginCityID"] == origin_id)
         & (city_pair_data["DestinationCityID"] == destination_id),
-        "seat_flights_per_year"
+        "Seat_Flights_perYear"
     ] += seat_flights_per_year
     city_pair_data.loc[
         (city_pair_data["OriginCityID"] == destination_id)
         & (city_pair_data["DestinationCityID"] == origin_id),
-        "seat_flights_per_year"
+        "Seat_Flights_perYear"
     ] += seat_flights_per_year
     city_pair_data.loc[
         (city_pair_data["OriginCityID"] == origin_id)
         & (city_pair_data["DestinationCityID"] == destination_id),
-        "exp_utility_sum"
+        "Exp_Utility_Sum"
     ] += outbound_exp_utility
     city_pair_data.loc[
         (city_pair_data["OriginCityID"] == destination_id)
         & (city_pair_data["DestinationCityID"] == origin_id),
-        "exp_utility_sum"
+        "Exp_Utility_Sum"
     ] += inbound_exp_utility
 
     # update airline-specific route dataframe
@@ -577,7 +577,8 @@ def create_aircraft(
             "aircraft_ids": [[aircraft_id]],
             "flights_per_year": [flights_per_year_list[-1]],
             "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [outbound_exp_utility]
+            "exp_utility": [outbound_exp_utility],
+            "fuel_stop": [fuel_stop]
         }
         new_df_1 = pd.DataFrame(airline_routes_newrow_1)
         airline_routes_newrow_2 = {
@@ -587,7 +588,8 @@ def create_aircraft(
             "aircraft_ids": [[aircraft_id]],
             "flights_per_year": [flights_per_year_list[-1]],
             "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [inbound_exp_utility]
+            "exp_utility": [inbound_exp_utility],
+            "fuel_stop": [fuel_stop]
         }
         new_df_2 = pd.DataFrame(airline_routes_newrow_2)
         airline_routes[airline_id] = pd.concat([
@@ -632,12 +634,37 @@ def optimise_fares(
     city_pair_data: pd.DataFrame,
     city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
+    max_fare: float,
     maxiters: int,
     demand_tolerance: float,
     save_folder_path: str
-) -> tuple[list[pd.DataFrame], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[
+    list[pd.DataFrame],
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame
+]:
     """
-    Optimise fares for all airlines, assuming no change in flight schedules
+    Optimise fares for all airlines, assuming no change in flight schedules. Iterate to find an equilibrium for the base year.
+
+    Parameters
+    ----------
+    airlines : pd.DataFrame
+    airline_routes : list[pd.DataFrame]
+    airline_fleets : list[pd.DataFrame]
+    city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    maxiters : int
+    demand_tolerance : float
+    save_folder_path : str
+
+    Returns
+    -------
+    airline_routes : list[pd.DataFrame]
+    city_pair_data : pd.DataFrame
+    fare_iters : pd.DataFrame
+    demand_iters : pd.DataFrame
     """
     # initialise dataframes tracking convergence
     fare_iters = pd.DataFrame()
@@ -662,38 +689,38 @@ def optimise_fares(
         print(f"        Iteration {iteration+1} of fare optimisation")
         # allow each airline to adjust their prices without knowledge of other airlines' choices
         for _, airline in airlines.iterrows():
-            for __, itin in airline_routes[airline["Airline_ID"]].iterrows():
+            for idx, itin in airline_routes[airline["Airline_ID"]].iterrows():
                 city_pair = city_pair_data[
                     (city_pair_data["OriginCityID"] == itin["origin"])
                     & (city_pair_data["DestinationCityID"] == itin["destination"])
                 ].iloc[0]
                 old_fare = itin["fare"]
-                itin["fare"] = maximise_itin_profit(
+                new_fare = maximise_itin_profit(
                     itin,
                     airline_fleets[airline["Airline_ID"]],
                     city_pair_data,
                     city_data,
                     aircraft_data,
+                    max_fare
                 )
+                airline_routes[airline["Airline_ID"]].loc[idx, "fare"] = new_fare
 
                 # update city_pair_data with new mean fare
                 # can update in place because these fare values are only used for overall O-D demand calculation
-                itin_fare_diff = itin["fare"] - old_fare
-                if itin_fare_diff != 0:
-                    prev_mean_fare = city_pair["Mean_Fare_USD"]
-
-                    city_pair_data.loc[
-                        (city_pair_data["OriginCityID"] == itin["origin"])
-                        & (city_pair_data["DestinationCityID"] == itin["destination"]),
-                        "Mean_Fare_USD"
-                    ] = (
-                        (prev_mean_fare * city_pair["seat_flights_per_year"])
-                        + (itin_fare_diff * itin["flights_per_year"])
-                    ) / city_pair["seat_flights_per_year"]
+                itin_fare_diff = new_fare - old_fare
+                prev_mean_fare = city_pair["Mean_Fare_USD"]
+                city_pair_data.loc[
+                    (city_pair_data["OriginCityID"] == itin["origin"])
+                    & (city_pair_data["DestinationCityID"] == itin["destination"]),
+                    "Mean_Fare_USD"
+                ] = (
+                    (prev_mean_fare * city_pair["Seat_Flights_perYear"])
+                    + (itin_fare_diff * itin["seat_flights_per_year"])
+                ) / city_pair["Seat_Flights_perYear"]
 
         # update demand for all O-D pairs
-        for _, city_pair in city_pair_data.iterrows():
-            city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
+        for idx, city_pair in city_pair_data.iterrows():
+            city_pair_data.loc[idx, "Total_Demand"] = demand.update_od_demand(city_pair)
 
         # write new columns to dataframes
         fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
@@ -707,7 +734,9 @@ def optimise_fares(
         if iteration > 0:
             diff = abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"])
             max_diff = diff.max()
-            print(f"        Maximum difference: {max_diff}")
+            mean_diff = diff.mean()
+            print(f"        Maximum demand shift: {max_diff}")
+            print(f"        Mean demand shift: {mean_diff}")
             
             if max_diff < demand_tolerance:
                 print(f"        Converged after {iteration} iterations")
@@ -722,11 +751,12 @@ def maximise_itin_profit(
     city_pair_data: pd.DataFrame,
     city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
+    max_fare: float
 ) -> float:
     """
     Maximise profit for a given itinerary by adjusting fare
     """
-    fare_bounds = (0, 50000)
+    fare_bounds = (0, max_fare)
 
     origin = city_data.loc[airline_route["origin"]]
     destination = city_data.loc[airline_route["destination"]]
@@ -745,7 +775,7 @@ def maximise_itin_profit(
             destination,
             fleet_df,
             aircraft_data,
-            update_od_demand=False
+            True
         )
 
     result = minimize_scalar(objective, bounds=fare_bounds, method="bounded")
@@ -754,7 +784,7 @@ def maximise_itin_profit(
 
 
 def itin_profit(
-    fare: float,
+    fare: float,  # new airline-specific itinerary fare to test
     airline_route: pd.Series,
     city_pair: pd.Series,
     origin: pd.Series,
@@ -774,9 +804,9 @@ def itin_profit(
 
     # update city_pair mean fare (weighted by seats available not seats filled)
     if update_od_demand:
-        total_revenue = city_pair["Mean_Fare_USD"] * city_pair["seat_flights_per_year"]
-        total_revenue += (fare - airline_route["fare"] * airline_route["flights_per_year"])
-        city_pair["Mean_Fare_USD"] = total_revenue / city_pair["seat_flights_per_year"]
+        total_revenue = city_pair["Mean_Fare_USD"] * city_pair["Seat_Flights_perYear"]
+        total_revenue += ((fare - airline_route["fare"]) * airline_route["seat_flights_per_year"])
+        city_pair["Mean_Fare_USD"] = total_revenue / city_pair["Seat_Flights_perYear"]
         city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
 
     # update airline route fare

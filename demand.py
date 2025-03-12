@@ -46,7 +46,7 @@ def update_itinerary_demand(
     demand : float
         demand in pax per year for the itinerary
     """
-    market_share = airline_route["exp_utility"] / city_pair["exp_utility_sum"]
+    market_share = airline_route["exp_utility"] / city_pair["Exp_Utility_Sum"]
     demand = math.floor(city_pair["Total_Demand"] * market_share)
     return demand
 
@@ -56,7 +56,7 @@ def calc_exp_utility(
     fare: float,
     flight_time_hrs: float,
     flights_per_year: int,
-    fuel_stop: None | int,
+    fuel_stop: int,
 ):
     """
     Calculate the e^utility of a flight segment.
@@ -71,8 +71,8 @@ def calc_exp_utility(
         Flight time in hours
     flights_per_year : int
         Number of flights per year
-    fuel_stop : None | int
-        ID of city where aircraft must stop to refuel, or None if non-stop
+    fuel_stop : int
+        ID of city where aircraft must stop to refuel, or -1 if non-stop
     
     Returns
     -------
@@ -80,8 +80,11 @@ def calc_exp_utility(
     """
     if flights_per_year == 0:
         exp_utility = 0
+    elif flights_per_year < 0:
+        exp_utility = 0
+        print(f"NEGATIVE FLIGHTS PER YEAR: {flights_per_year}")
     else:
-        if fuel_stop is None:
+        if fuel_stop == -1:
             segment_term = demand_coefficients["mu"]
         else:
             segment_term = 2*demand_coefficients["mu"]

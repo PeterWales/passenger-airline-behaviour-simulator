@@ -83,6 +83,7 @@ def main():
         print(f"    Importing data from {data_path}")
 
         aircraft_data = pd.read_csv(os.path.join(data_path, "AircraftData.csv"))
+        aircraft_data.set_index('AircraftID', inplace=True)
         aircraft_data["TypicalRange_m"] = aircraft.calc_ranges(aircraft_data, run_parameters["StartYear"])
         aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
@@ -169,7 +170,7 @@ def main():
             )
             print("    Checking airport capacity limits...")
             if len(capacity_flag_list) > 0:
-                print(f"    Limits exceeded for {len(capacity_flag_list)} city-pair(s). Reassigning fleets...")
+                print(f"    Limits exceeded for {len(capacity_flag_list)} city/cities. Reassigning fleets...")
                 (
                     airline_fleets,
                     airline_routes,
@@ -204,8 +205,9 @@ def main():
         print("    Simulating base year...")
 
         # arbitrary numbers for testing
-        maxiters = 100
+        maxiters = 10
         demand_tolerance = 100.0
+        max_fare = 50000.0
 
         airline_routes, city_pair_data, fare_iters, demand_iters = airline.optimise_fares(
             airlines,
@@ -214,6 +216,7 @@ def main():
             city_pair_data,
             city_data,
             aircraft_data,
+            max_fare,
             maxiters,
             demand_tolerance,
             save_folder_path

@@ -44,26 +44,24 @@ def initialise_routes(
     # initialise whole columns
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
-    city_pair_data["seat_flights_per_year"] = 0
-    city_pair_data["exp_utility_sum"] = 0
 
     # initialise lists using 32-bit data types where possible for memory efficiency
     n = len(city_pair_data)
     remove_idx = []
-    distance = np.full(n, fill_value=0, dtype=np.float32)
-    origin_long = np.full(n, fill_value=0, dtype=np.float32)
-    origin_lat = np.full(n, fill_value=0, dtype=np.float32)
-    destination_long = np.full(n, fill_value=0, dtype=np.float32)
-    destination_lat = np.full(n, fill_value=0, dtype=np.float32)
-    price_elasticity_route = np.full(n, fill_value=0, dtype=np.float32)
-    price_elasticity_national = np.full(n, fill_value=0, dtype=np.float32)
-    origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
-    destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
+    distance = np.zeros(n, dtype=np.float32)
+    origin_long = np.zeros(n, dtype=np.float32)
+    origin_lat = np.zeros(n, dtype=np.float32)
+    destination_long = np.zeros(n, dtype=np.float32)
+    destination_lat = np.zeros(n, dtype=np.float32)
+    price_elasticity_route = np.zeros(n, dtype=np.float32)
+    price_elasticity_national = np.zeros(n, dtype=np.float32)
+    origin_income_elasticity = np.zeros(n, dtype=np.float32)
+    destination_income_elasticity = np.zeros(n, dtype=np.float32)
     seat_flights_per_year = np.zeros(n, dtype=np.int32)
-    static_demand_factor = np.zeros(n)
+    static_demand_factor = np.zeros(n, dtype=np.float64)
+    exp_utility_sum = np.zeros(n, dtype=np.float64)
     international = np.zeros(n, dtype=bool)
 
-    # show a progress bar because this step can take a while
     for idx, route in city_pair_data.iterrows():
         origin_id = route["OriginCityID"]
         destination_id = route["DestinationCityID"]
@@ -148,6 +146,7 @@ def initialise_routes(
     city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
     city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
     city_pair_data["Static_Demand_Factor"] = static_demand_factor
+    city_pair_data["Exp_Utility_Sum"] = exp_utility_sum.astype('float64')
     city_pair_data["International"] = international.astype('bool')
 
     # remove flagged routes
@@ -386,8 +385,8 @@ def choose_fuel_stop(
 
     Returns
     -------
-    fuel_stop : int | None
-        City ID of the chosen fuel stop or None if no suitable city is found
+    fuel_stop : int
+        City ID of the chosen fuel stop or -1 if no suitable city is found
     """
     # calculate the midpoint between the origin and destination
     origin_coords = snv.LatLon(
@@ -402,7 +401,7 @@ def choose_fuel_stop(
     midpoint = origin_coords.midpointTo(destination_coords)
 
     # find the nearest city to the midpoint that has a long enough runway
-    fuel_stop = None
+    fuel_stop = -1
     min_distance = np.inf
     for city_id, city in city_data.iterrows():
         city_coords = snv.LatLon(

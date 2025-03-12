@@ -70,7 +70,7 @@ def calc_flights_per_year(
     aircraft: pd.Series,
     city_pair_data: pd.DataFrame,
     fuel_stop_series: None | pd.Series,
-    fuel_stop_id: None | int
+    fuel_stop_id: int
 ) -> int:
     """
     Calculate the number of return flights per year the aircraft can fly on its specified route
@@ -90,7 +90,7 @@ def calc_flights_per_year(
     fuel_stop_series : None | pd.Series
         Series of data for city where aircraft must stop to refuel, or None if non-stop
     fuel_stop_id : int
-        ID of city where aircraft must stop to refuel
+        ID of city where aircraft must stop to refuel, or -1 if non-stop
 
     Returns
     -------
@@ -98,7 +98,7 @@ def calc_flights_per_year(
     """
     curfew_time = 7  # assume airports are closed between 11pm and 6am
 
-    if fuel_stop_series is None:
+    if fuel_stop_id == -1:
         outbound_route = city_pair_data.loc[
             (city_pair_data["OriginCityID"] == origin_id)
             & (city_pair_data["DestinationCityID"] == destination_id)
@@ -225,15 +225,15 @@ def calc_fuel_cost(
     ):
         fuel_cost_USDperflt = -1  # flag as infeasible
     else:
-        # 1L = 0.264 US Gallons, fuel price in USD/gallon
-        fuel_cost_USDperflt = fuel_consumption_kg * 0.264 * FuelCost_USDperGallon
+        # 1kg jet fuel = 1.244L, 1L = 0.264 US Gallons, fuel price in USD/gallon
+        fuel_cost_USDperflt = fuel_consumption_kg * 1.244 * 0.264 * FuelCost_USDperGallon
     return fuel_cost_USDperflt
 
 
 def calc_landing_fee(
     city_pair: pd.Series,
     destination: pd.Series,
-    aircraft: pd.Series,
+    aircraft_size: int,
     pax: int,
 ) -> float:
     """
@@ -244,7 +244,7 @@ def calc_landing_fee(
     else:
         flight_type = "Domestic"
 
-    mvmt_fee = destination[f"{flight_type}_Fees_USDperMovt"][aircraft["AircraftID"]]
+    mvmt_fee = destination[f"{flight_type}_Fees_USDperMovt"][aircraft_size]
     pax_fee = destination[f"{flight_type}_Fees_USDperPax"] * pax
     fee_perflt = mvmt_fee + pax_fee
     return fee_perflt
@@ -261,8 +261,9 @@ def calc_op_cost(
     """
     # TODO: define magic numbers as constants
     flight_time_hrs = (city_pair["Great_Circle_Distance_m"] / aircraft["CruiseV_ms"]) / 3600.0
-    ground_time_hrs = origin["Taxi_Out_mins"] + destination["Taxi_In_mins"] + aircraft["Turnaround_hrs"]
+    ground_time_hrs = (origin["Taxi_Out_mins"]/60.0) + (destination["Taxi_In_mins"]/60.0) + aircraft["Turnaround_hrs"]
 
+    # pilots
     if flight_time_hrs < 8:
         n_pilots = 2
     elif flight_time_hrs < 12:
@@ -270,6 +271,7 @@ def calc_op_cost(
     else:
         n_pilots = 4
 
+    # cabin crew
     if flight_time_hrs < 10:
         n_cc = math.ceil(aircraft["Seats"] / 50)
     else:
@@ -278,7 +280,6 @@ def calc_op_cost(
     op_cost_perflt = (
         n_pilots * aircraft["PilotCost_USDPerPilotPerHour"]
         + n_cc * aircraft["CrewCost_USDPerCrewPerHour"]
-        + aircraft["OpCost_USDPerHr"]
     ) * (flight_time_hrs + ground_time_hrs) + (
         aircraft["OpCost_USDPerHr"] * flight_time_hrs
     )
@@ -291,7 +292,7 @@ def calc_lease_cost(aircraft: pd.Series) -> float:
     Calculate the lease cost per flight
     """
     # note aircraft["FlightsPerYear"] is number of return journeys => equal to number of outbound flights
-    lease_cost_perflt = aircraft["Lease_USDperMonth"] * 12 / aircraft["Flights_perYear"]
+    lease_cost_perflt = float(aircraft["Lease_USDperMonth"]) * 12.0 / aircraft["Flights_perYear"]
     return lease_cost_perflt
 
 
@@ -312,22 +313,22 @@ def calc_flight_cost(
     total_seats = 0
     for acft_id in planes:
         aircraft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
-        aircraft_type = aircraft_data.loc[aircraft_data["AircraftID"] == aircraft["SizeClass"]].iloc[0]
+        aircraft_type = aircraft_data.loc[aircraft["SizeClass"]]
         total_seats += aircraft_type["Seats"]
 
     # split demand between aircraft based on seat capacity and calculate total cost
     annual_cost = 0
     for acft_id in planes:
         aircraft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
-        aircraft_type = aircraft_data.loc[aircraft_data["AircraftID"] == aircraft["SizeClass"]].iloc[0]
+        aircraft_type = aircraft_data.loc[aircraft["SizeClass"]]
 
-        itin_demand_share = aircraft_type["Seats"] * annual_itin_demand / total_seats
+        itin_demand_share = float(aircraft_type["Seats"] * annual_itin_demand) / total_seats
         pax_perflt_share = math.floor(itin_demand_share / aircraft["Flights_perYear"])
         pax = min([pax_perflt_share, aircraft_type["Seats"]])
 
         cost_perflt = (
             calc_op_cost(aircraft_type, city_pair, origin, destination)
-            + calc_landing_fee(city_pair, destination, aircraft_type, pax)
+            + calc_landing_fee(city_pair, destination, int(aircraft["SizeClass"]), pax)
             + calc_fuel_cost(aircraft_type, aircraft, city_pair, pax, FuelCost_USDperGallon)
             + calc_lease_cost(aircraft)
         )
