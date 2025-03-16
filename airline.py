@@ -775,7 +775,6 @@ def maximise_itin_profit(
             destination,
             fleet_df,
             aircraft_data,
-            True
         )
 
     result = minimize_scalar(objective, bounds=fare_bounds, method="bounded")
