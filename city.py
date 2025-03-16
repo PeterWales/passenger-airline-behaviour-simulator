@@ -327,7 +327,6 @@ def enforce_capacity(
                     destination,
                     airline_fleets[airline["Airline_ID"]],
                     aircraft_data,
-                    update_od_demand = False
                 ) + al.itin_profit(
                     in_itin["fare"],
                     in_itin,
@@ -336,7 +335,6 @@ def enforce_capacity(
                     origin,
                     airline_fleets[airline["Airline_ID"]],
                     aircraft_data,
-                    update_od_demand = False
                 )
 
                 # calculate flight time from aircraft speed and route distance
