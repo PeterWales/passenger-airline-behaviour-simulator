@@ -576,7 +576,7 @@ def enforce_capacity(
                                 new_in_route = {
                                     "origin": [destination_id],
                                     "destination": [origin_id],
-                                    "fare": [return_fare],
+                                    "fare": [city_pair_data.loc[return_mask, "Fare_Est"].iloc[0]],
                                     "aircraft_ids": [[reassign_ac["AircraftID"]]],
                                     "flights_per_year": [flights_per_year],
                                     "seat_flights_per_year": [seat_flights_per_year],
