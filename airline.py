@@ -494,10 +494,10 @@ def create_aircraft(
         )
     )
 
+    # add movements to cities and flag if capacity limit exceeded
     city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 2* since each flight is return
     city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year
-
-    # flag city if capacity limit exceeded
+    
     if (
         (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
         and (origin_id not in capacity_flag_list)
@@ -508,6 +508,14 @@ def create_aircraft(
         and (destination_id not in capacity_flag_list)
     ):
         capacity_flag_list.append(destination_id)
+
+    if fuel_stop != -1:
+        city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+        if (
+            (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
+            and (fuel_stop not in capacity_flag_list)
+        ):
+            capacity_flag_list.append(fuel_stop)
 
     seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
     flight_time_hrs = (
