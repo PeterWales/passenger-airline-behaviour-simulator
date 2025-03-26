@@ -66,8 +66,8 @@ def initialise_airlines(
         sorted_region = sorted(
             country_data.loc[countries].iterrows(),
             key=lambda x: (
-                x[1]["GDP"],
-                x[1]["Population_2015"],
+                x[1]["BaseYearGDP"],
+                x[1]["BaseYearPopulation"],
             ),  # Use population as tiebreaker
             reverse=True,
         )

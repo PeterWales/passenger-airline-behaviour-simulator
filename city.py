@@ -6,6 +6,23 @@ import demand as demand
 import aircraft as acft
 
 
+def set_base_values(
+    country_data: pd.DataFrame,
+    population_data: pd.DataFrame,
+    income_data: pd.DataFrame,
+    base_year: int,
+) -> pd.DataFrame:
+    country_populations = []
+    country_incomes = []
+    for _, country in country_data.iterrows():
+        country_id = country["CountryID"]
+        country_populations.append(population_data.loc[population_data["Number"] == country_id, str(base_year)].iloc[0])
+        country_incomes.append(income_data.loc[income_data["Number"] == country_id, str(base_year)].iloc[0])
+    country_data["BaseYearPopulation"] = country_populations
+    country_data["BaseYearGDP"] = country_incomes
+    return country_data
+
+
 def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) -> tuple[pd.DataFrame, list[list]]:
     """
     Incorporate parts of airport_data into city_data DataFrame so that cities can be treated as single entities.
@@ -702,3 +719,23 @@ def enforce_capacity(
                 airline_fleets[airline_id].loc[acft_mask, "Flights_perYear"] = 0
 
     return airline_fleets, airline_routes, city_pair_data, city_data
+
+
+def annual_update(
+    city_data: pd.DataFrame,
+    city_lookup: list,
+    population_data: pd.DataFrame,
+    income_data: pd.DataFrame,
+    year_entering: int,
+):
+    for _, country_pop in population_data.iterrows():
+        pop_multiplier = country_pop[str(year_entering)] / country_pop[str(year_entering-1)]
+        for city_id in city_lookup[country_pop["Number"]]:
+            city_data.loc[city_id, "Population"] *= pop_multiplier
+    
+    for _, country_inc in income_data.iterrows():
+        inc_multiplier = country_inc[str(year_entering)] / country_inc[str(year_entering-1)]
+        for city_id in city_lookup[country_inc["Number"]]:
+            city_data.loc[city_id, "Income_USDpercap"] *= inc_multiplier
+
+    return city_data

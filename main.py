@@ -96,6 +96,19 @@ def main():
         # change country code from 100+ to 0+ to allow for list indexing by code
         country_data["Number"] = country_data["Number"] - 100
 
+        population_data = pd.read_csv(os.path.join(data_path, "PopulationProjections.csv"))
+        # change country code from 100+ to 0+ to allow for list indexing by code
+        population_data["Number"] = population_data["Number"] - 100
+        income_data = pd.read_csv(os.path.join(data_path, "IncomeProjections.csv"))
+        # change country code from 100+ to 0+ to allow for list indexing by code
+        income_data["Number"] = income_data["Number"] - 100
+        country_data = city.set_base_values(
+            country_data,
+            population_data,
+            income_data,
+            run_parameters["StartYear"],
+        )
+
         price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
         income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
         # import DemandCoefficients.csv as dict where first row is keys and second row is values

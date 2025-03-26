@@ -419,3 +419,32 @@ def choose_fuel_stop(
                 fuel_stop = city_id
                 min_distance = distance
     return fuel_stop
+
+
+def annual_update(
+    city_pair_data: pd.DataFrame,
+    city_data: pd.DataFrame,
+    population_elasticity: float
+):
+    """"
+    Update the non-price-dependent contribution to demand factor for all routes based on the city data and elasticities.
+
+    NOTE: When updating for a new year, the city_data DataFrame must be updated first.
+    """
+    for idx, route in city_pair_data.iterrows():
+        origin_id = route["OriginCityID"]
+        destination_id = route["DestinationCityID"]
+        city_pair_data.at[idx, "Static_Demand_Factor"] = calc_static_demand_factor(
+            city_data.loc[origin_id, "Population"],
+            city_data.loc[destination_id, "Population"],
+            city_data.loc[origin_id, "BaseYearPopulation"],
+            city_data.loc[destination_id, "BaseYearPopulation"],
+            city_data.loc[origin_id, "Income_USDpercap"],
+            city_data.loc[destination_id, "Income_USDpercap"],
+            city_data.loc[origin_id, "BaseYearIncome"],
+            city_data.loc[destination_id, "BaseYearIncome"],
+            route["Origin_Income_Elasticity"],
+            route["Destination_Income_Elasticity"],
+            population_elasticity,
+        )
+    return city_pair_data

@@ -405,3 +405,26 @@ def calc_flight_cost(
         )
         annual_cost += cost_perflt * aircraft["Flights_perYear"]
     return annual_cost
+
+
+def annual_update(
+    airlines: pd.DataFrame,
+    airline_fleets: list[pd.DataFrame],
+    aircraft_data: pd.DataFrame,
+    year_entering: int,
+) -> list[pd.DataFrame]:
+    # TODO: when new ac added, check whether efficiency improvement negates the need for a fuel stop and update route appropriately
+    for airline in airlines.iterrows():
+        airline_id = airline["Airline_ID"]
+
+        for ac in airline_fleets[airline_id]:
+            ac_type = aircraft_data.loc[ac["SizeClass"]]
+            if ac["Age_years"] == ac_type["RetirementAge_years"]:
+                # retire aircraft and replace with a new one of the same type
+                ac["Age_years"] = 0
+                ac["Lease_USDperMonth"] = ac_type["LeaseRateNew_USDPerMonth"]
+                ac["BreguetFactor"] = (ac_type["Breguet_gradient"] * year_entering) + ac_type["Breguet_intercept"]
+            else:
+                ac["Age_years"] += 1
+                ac["Lease_USDperMonth"] *= ac_type["LeaseRateAnnualMultiplier"]
+    return airline_fleets
