@@ -67,6 +67,7 @@ def calc_itin_time(
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
+    fleet_data: pd.DataFrame,
 ) -> float:
     """
     Calculate the time taken to complete a given itinerary (one-way)
@@ -80,7 +81,8 @@ def calc_itin_time(
     speed_sum = 0
     turnaround_sum = 0
     for ac in itinerary["aircraft_ids"]:
-        aircraft = aircraft_data.loc[ac]
+        ac_type = fleet_data.loc[fleet_data["AircraftID"] == ac].iloc[0]["SizeClass"]
+        aircraft = aircraft_data.loc[ac_type]
         speed_sum += aircraft["CruiseV_ms"]
         turnaround_sum += aircraft["Turnaround_hrs"]
     mean_speed = speed_sum / n_ac
@@ -122,9 +124,9 @@ def calc_itin_time(
             flight_time_1_hrs + flight_time_2_hrs + 2*mean_turnaround
             + (
                 city_data.loc[origin_id, "Taxi_Out_mins"]
-                + city_data.loc[destination_id, "Taxi_In_mins"],
-                + city_data.loc[fuel_stop_id, "Taxi_In_mins"],
-                + city_data.loc[fuel_stop_id, "Taxi_Out_mins"],
+                + city_data.loc[destination_id, "Taxi_In_mins"]
+                + city_data.loc[fuel_stop_id, "Taxi_In_mins"]
+                + city_data.loc[fuel_stop_id, "Taxi_Out_mins"]
             ) / 60.0
         )
 

@@ -282,6 +282,7 @@ def enforce_capacity(
         # initialise lists
         reassign_airline_id = []
         reassign_aircraft_ids = []
+        reassign_origin = []
         reassign_destination = []
         ressign_fuelstop = []
         reassign_profit_per_seat = []
@@ -321,10 +322,10 @@ def enforce_capacity(
                 origin = city_data.loc[origin_id]
                 destination = city_data.loc[destination_id]
 
-                in_itin = airline_routes[airline["Airline_ID"]][
-                    (airline_routes[airline["Airline_ID"]]["origin"] == destination_id)
-                    & (airline_routes[airline["Airline_ID"]]["destination"] == origin_id)
-                    & (airline_routes[airline["Airline_ID"]]["fuel_stop"] == fuel_stop_id)
+                in_itin = airline_routes[airline_id][
+                    (airline_routes[airline_id]["origin"] == destination_id)
+                    & (airline_routes[airline_id]["destination"] == origin_id)
+                    & (airline_routes[airline_id]["fuel_stop"] == fuel_stop_id)
                 ].iloc[0]
 
                 # calculate sum of all seats that the airline has assigned to this itinerary
@@ -340,7 +341,7 @@ def enforce_capacity(
                         city_pair_out,
                         origin,
                         destination,
-                        airline_fleets[airline["Airline_ID"]],
+                        airline_fleets[airline_id],
                         aircraft_data,
                     ) + al.itin_profit(
                         in_itin["fare"],
@@ -348,7 +349,7 @@ def enforce_capacity(
                         city_pair_in,
                         destination,
                         origin,
-                        airline_fleets[airline["Airline_ID"]],
+                        airline_fleets[airline_id],
                         aircraft_data,
                     )
                 ) / itin_seats
@@ -358,18 +359,21 @@ def enforce_capacity(
                     out_itin,
                     city_data,
                     city_pair_data,
-                    aircraft_data
+                    aircraft_data,
+                    airline_fleets[airline_id],
                 )
                 in_itin_time = acft.calc_itin_time(
                     in_itin,
                     city_data,
                     city_pair_data,
-                    aircraft_data
+                    aircraft_data,
+                    airline_fleets[airline_id],
                 )
 
                 # save data
-                reassign_airline_id.append(airline["Airline_ID"])
+                reassign_airline_id.append(airline_id)
                 reassign_aircraft_ids.append(out_itin["aircraft_ids"])
+                reassign_origin.append(out_itin["origin"])
                 reassign_destination.append(out_itin["destination"])
                 ressign_fuelstop.append(out_itin["fuel_stop"])
                 reassign_profit_per_seat.append(profit_per_seat)
@@ -380,11 +384,12 @@ def enforce_capacity(
                 reassign_flights_per_year.append(out_itin["flights_per_year"])
                 reassign_fuel_stop.append(out_itin["fuel_stop"])
 
-        # create dataframe and sort by profit (lowest first)
+        # create dataframe
         potential_reassign = pd.DataFrame(
             {
                 "Airline_ID": reassign_airline_id,
                 "Aircraft_IDs": reassign_aircraft_ids,
+                "Origin": reassign_origin,
                 "Destination": reassign_destination,
                 "Fuel_Stop": ressign_fuelstop,
                 "Profit_perSeat": reassign_profit_per_seat,
@@ -396,7 +401,25 @@ def enforce_capacity(
                 "Fuel_Stop": reassign_fuel_stop
             }
         )
-        potential_reassign.sort_values("Profit", ascending=True, inplace=True)
+
+        # ensure only one leg of a return itinerary is included (duplicates arise due to fuel stops at capacity-limited cities)
+        idx_to_drop = []
+        for idx, row in potential_reassign.iterrows():
+            # find indices of any route flown by the same airline with opposite origin and destination
+            return_mask = (
+                (potential_reassign["Origin"] == row["Destination"])
+                & (potential_reassign["Destination"] == row["Origin"])
+                & (potential_reassign["Fuel_Stop"] == row["Fuel_Stop"])
+                & (potential_reassign["Airline_ID"] == row["Airline_ID"])
+            )
+            return_index = potential_reassign[return_mask].index
+            if not return_index.empty and return_index[0] > idx:
+                idx_to_drop.append(return_index[0])
+        
+        potential_reassign.drop(idx_to_drop, inplace=True)
+
+        # sort by profit (lowest first)
+        potential_reassign.sort_values("Profit_perSeat", ascending=True, inplace=True)
 
         # reassign aircraft one-by-one until capacity is no longer exceeded, starting with lowest profit itinerary
         while city_data.loc[city_id, "Movts_perHr"] > city_data.loc[city_id, "Capacity_MovtsPerHr"]:
@@ -441,8 +464,8 @@ def enforce_capacity(
                 & (airline_routes[airline_id]["destination"] == reassign_ac["RouteOrigin"])
                 & (airline_routes[airline_id]["fuel_stop"] == reassign_ac["FuelStop"])
             )
-            old_out_exp_utility = airline_routes[airline_id].loc[out_al_route_mask, "exp_utility"]
-            old_in_exp_utility = airline_routes[airline_id].loc[in_al_route_mask, "exp_utility"]
+            old_out_exp_utility = airline_routes[airline_id].loc[out_al_route_mask, "exp_utility"].iloc[0]
+            old_in_exp_utility = airline_routes[airline_id].loc[in_al_route_mask, "exp_utility"].iloc[0]
             new_out_exp_utility = demand.calc_exp_utility(
                 demand_coefficients,
                 potential_reassign.iloc[0]["Out_Fare"],
@@ -461,11 +484,11 @@ def enforce_capacity(
             city_pair_data.loc[inbound_mask, "Exp_Utility_Sum"] += (new_in_exp_utility - old_in_exp_utility)
 
             # check if airline has any aircraft left on this route
-            if potential_reassign.iloc[0]["Flights_perYear"] <= 0:
+            if len(potential_reassign.iloc[0]["Aircraft_IDs"]) == 1:
                 # remove itinerary from potential_reassign and airline_routes
                 potential_reassign.drop(potential_reassign.index[0], inplace=True)
-                airline_routes[airline_id] = airline_routes[airline_id].drop(out_al_route_mask)
-                airline_routes[airline_id] = airline_routes[airline_id].drop(in_al_route_mask)
+                indices_to_drop = airline_routes[airline_id][out_al_route_mask | in_al_route_mask].index
+                airline_routes[airline_id] = airline_routes[airline_id].drop(indices_to_drop)
             else:
                 # update aircraft ids, exp(utility), flights_per_year and seat_flights_per_year in airline_routes
                 airline_routes[airline_id].loc[out_al_route_mask, "aircraft_ids"].iloc[0].remove(reassign_ac["AircraftID"])
@@ -478,34 +501,34 @@ def enforce_capacity(
                 airline_routes[airline_id].loc[in_al_route_mask, "exp_utility"] = new_in_exp_utility
 
                 # update Flights_perYear and Aircraft_IDs in potential_reassign for next while loop iteration
-                potential_reassign.iloc[0]["Flights_perYear"] -= reassign_ac["Flights_perYear"]
+                potential_reassign.loc[potential_reassign.index[0], "Flights_perYear"] = airline_routes[airline_id].loc[out_al_route_mask, "flights_per_year"].iloc[0]
                 # reassign_ac["AircraftID"] already removed from potential_reassign.iloc[0]["Aircraft_IDs"] due to removal from airline_routes
 
                 # recalculate profit per seat for next while loop iteration
                 itin_seats = 0
                 for ac_id in potential_reassign.iloc[0]["Aircraft_IDs"]:
                     itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
-                potential_reassign.iloc[0]["Profit_perSeat"] = (
+                potential_reassign.loc[potential_reassign.index[0], "Profit_perSeat"] = (
                     al.itin_profit(
                         potential_reassign.iloc[0]["Out_Fare"],
                         airline_routes[airline_id].loc[out_al_route_mask].iloc[0],
-                        city_pair_data.loc[outbound_mask],
+                        city_pair_data.loc[outbound_mask].iloc[0],
                         city_data.loc[reassign_ac["RouteOrigin"]],
                         city_data.loc[reassign_ac["RouteDestination"]],
-                        airline_fleets[airline["Airline_ID"]],
+                        airline_fleets[airline_id],
                         aircraft_data,
                     ) + al.itin_profit(
                         potential_reassign.iloc[0]["In_Fare"],
                         airline_routes[airline_id].loc[in_al_route_mask].iloc[0],
-                        city_pair_data.loc[inbound_mask],
+                        city_pair_data.loc[inbound_mask].iloc[0],
                         city_data.loc[reassign_ac["RouteDestination"]],
                         city_data.loc[reassign_ac["RouteOrigin"]],
-                        airline_fleets[airline["Airline_ID"]],
+                        airline_fleets[airline_id],
                         aircraft_data,
                     )
                 ) / itin_seats
                 # reorder potential_reassign by profit (lowest first)
-                potential_reassign.sort_values("Profit", ascending=True, inplace=True)
+                potential_reassign.sort_values("Profit_perSeat", ascending=True, inplace=True)
 
             # reassign aircraft to route with highest base demand that isn't limited by capacity or aircraft range
             city_pair_data.sort_values("BaseYearODDemandPax_Est", ascending=False, inplace=True)
@@ -593,6 +616,17 @@ def enforce_capacity(
 
                                 old_out_exp_utility = 0.0
                                 old_in_exp_utility = 0.0
+
+                                out_mask = (
+                                    (airline_routes[airline_id]["origin"] == origin_id)
+                                    & (airline_routes[airline_id]["destination"] == destination_id)
+                                    & (airline_routes[airline_id]["fuel_stop"] == -1)
+                                )
+                                in_mask = (
+                                    (airline_routes[airline_id]["origin"] == destination_id)
+                                    & (airline_routes[airline_id]["destination"] == origin_id)
+                                    & (airline_routes[airline_id]["fuel_stop"] == -1)
+                                )
                             else:
                                 # add to existing route
                                 out_mask = (
@@ -605,8 +639,8 @@ def enforce_capacity(
                                     & (airline_routes[airline_id]["destination"] == origin_id)
                                     & (airline_routes[airline_id]["fuel_stop"] == -1)
                                 )
-                                old_out_exp_utility = airline_routes[airline_id].loc[out_mask, "exp_utility"]
-                                old_in_exp_utility = airline_routes[airline_id].loc[in_mask, "exp_utility"]
+                                old_out_exp_utility = airline_routes[airline_id].loc[out_mask, "exp_utility"].iloc[0]
+                                old_in_exp_utility = airline_routes[airline_id].loc[in_mask, "exp_utility"].iloc[0]
                                 airline_routes[airline_id].loc[out_mask, "aircraft_ids"].iloc[0].append(reassign_ac["AircraftID"])
                                 airline_routes[airline_id].loc[in_mask, "aircraft_ids"].iloc[0].append(reassign_ac["AircraftID"])
                                 airline_routes[airline_id].loc[out_mask, "flights_per_year"] += flights_per_year
@@ -623,12 +657,14 @@ def enforce_capacity(
                                 city_data,
                                 city_pair_data,
                                 aircraft_data,
+                                airline_fleets[airline_id],
                             )
                             in_itin_time = acft.calc_itin_time(
                                 airline_routes[airline_id].loc[in_mask].iloc[0],
                                 city_data,
                                 city_pair_data,
                                 aircraft_data,
+                                airline_fleets[airline_id],
                             )
                             outbound_exp_utility = demand.calc_exp_utility(
                                 demand_coefficients,
