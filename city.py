@@ -251,7 +251,8 @@ def enforce_capacity(
     city_data: pd.DataFrame,
     city_lookup: list[list[int]],
     capacity_flag_list: list[int],
-    demand_coefficients: dict[str, float]
+    demand_coefficients: dict[str, float],
+    FuelCost_USDperGallon: float,
 ) -> tuple[
     list[pd.DataFrame],
     list[pd.DataFrame],
@@ -281,6 +282,8 @@ def enforce_capacity(
         list of city IDs where capacity limits are exceeded
     demand_coefficients : dict
         dictionary of demand coefficients
+    fuel_cost_USDpergallon : float
+        cost of fuel in USD per gallon
 
     Returns
     -------
@@ -360,6 +363,7 @@ def enforce_capacity(
                         destination,
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                     ) + al.itin_profit(
                         in_itin["fare"],
                         in_itin,
@@ -368,6 +372,7 @@ def enforce_capacity(
                         origin,
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                     )
                 ) / itin_seats
 
@@ -534,6 +539,7 @@ def enforce_capacity(
                         city_data.loc[reassign_ac["RouteDestination"]],
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                     ) + al.itin_profit(
                         potential_reassign.iloc[0]["In_Fare"],
                         airline_routes[airline_id].loc[in_al_route_mask].iloc[0],
@@ -542,6 +548,7 @@ def enforce_capacity(
                         city_data.loc[reassign_ac["RouteOrigin"]],
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                     )
                 ) / itin_seats
                 # reorder potential_reassign by profit (lowest first)

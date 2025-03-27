@@ -643,17 +643,14 @@ def optimise_fares(
     city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     max_fare: float,
-    maxiters: int,
-    demand_tolerance: float,
-    save_folder_path: str
+    FuelCost_USDperGallon,
 ) -> tuple[
     list[pd.DataFrame],
-    pd.DataFrame,
-    pd.DataFrame,
     pd.DataFrame
 ]:
     """
-    Optimise fares for all airlines, assuming no change in flight schedules. Iterate to find an equilibrium for the base year.
+    Airlines adjust their fares to attempt to maximise profit, assuming no change in flight schedules.
+    Airlines have no knowledge of the choices of other airlines.
 
     Parameters
     ----------
@@ -663,94 +660,48 @@ def optimise_fares(
     city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
     aircraft_data : pd.DataFrame
-    maxiters : int
-    demand_tolerance : float
-    save_folder_path : str
 
     Returns
     -------
     airline_routes : list[pd.DataFrame]
     city_pair_data : pd.DataFrame
-    fare_iters : pd.DataFrame
-    demand_iters : pd.DataFrame
     """
-    # initialise dataframes tracking convergence
-    fare_iters = pd.DataFrame()
-    fare_iters["Origin"] = city_pair_data["OriginCityID"]
-    fare_iters["Destination"] = city_pair_data["DestinationCityID"]
-    fare_iters["Origin_Latitude"] = city_pair_data["Origin_Latitude"]
-    fare_iters["Origin_Longitude"] = city_pair_data["Origin_Longitude"]
-    fare_iters["Destination_Latitude"] = city_pair_data["Destination_Latitude"]
-    fare_iters["Destination_Longitude"] = city_pair_data["Destination_Longitude"]
-    fare_iters["base"] = city_pair_data["Mean_Fare_USD"]
+    for _, airline in airlines.iterrows():
+        for idx, itin in airline_routes[airline["Airline_ID"]].iterrows():
+            city_pair = city_pair_data[
+                (city_pair_data["OriginCityID"] == itin["origin"])
+                & (city_pair_data["DestinationCityID"] == itin["destination"])
+            ].iloc[0]
+            old_fare = itin["fare"]
+            new_fare = maximise_itin_profit(
+                itin,
+                airline_fleets[airline["Airline_ID"]],
+                city_pair_data,
+                city_data,
+                aircraft_data,
+                max_fare,
+                FuelCost_USDperGallon,
+            )
+            airline_routes[airline["Airline_ID"]].loc[idx, "fare"] = new_fare
 
-    demand_iters = pd.DataFrame()
-    demand_iters["Origin"] = city_pair_data["OriginCityID"]
-    demand_iters["Destination"] = city_pair_data["DestinationCityID"]
-    demand_iters["Origin_Latitude"] = city_pair_data["Origin_Latitude"]
-    demand_iters["Origin_Longitude"] = city_pair_data["Origin_Longitude"]
-    demand_iters["Destination_Latitude"] = city_pair_data["Destination_Latitude"]
-    demand_iters["Destination_Longitude"] = city_pair_data["Destination_Longitude"]
-    demand_iters["base"] = city_pair_data["Total_Demand"]
+            # update city_pair_data with new mean fare
+            # can update in place because these fare values are only used for overall O-D demand calculation
+            itin_fare_diff = new_fare - old_fare
+            prev_mean_fare = city_pair["Mean_Fare_USD"]
+            city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == itin["origin"])
+                & (city_pair_data["DestinationCityID"] == itin["destination"]),
+                "Mean_Fare_USD"
+            ] = (
+                (prev_mean_fare * city_pair["Seat_Flights_perYear"])
+                + (itin_fare_diff * itin["seat_flights_per_year"])
+            ) / city_pair["Seat_Flights_perYear"]
 
-    for iteration in range(maxiters):
-        print(f"        Iteration {iteration+1} of fare optimisation")
-        # allow each airline to adjust their prices without knowledge of other airlines' choices
-        for _, airline in airlines.iterrows():
-            for idx, itin in airline_routes[airline["Airline_ID"]].iterrows():
-                city_pair = city_pair_data[
-                    (city_pair_data["OriginCityID"] == itin["origin"])
-                    & (city_pair_data["DestinationCityID"] == itin["destination"])
-                ].iloc[0]
-                old_fare = itin["fare"]
-                new_fare = maximise_itin_profit(
-                    itin,
-                    airline_fleets[airline["Airline_ID"]],
-                    city_pair_data,
-                    city_data,
-                    aircraft_data,
-                    max_fare
-                )
-                airline_routes[airline["Airline_ID"]].loc[idx, "fare"] = new_fare
+    # update demand for all O-D pairs
+    for idx, city_pair in city_pair_data.iterrows():
+        city_pair_data.loc[idx, "Total_Demand"] = demand.update_od_demand(city_pair)
 
-                # update city_pair_data with new mean fare
-                # can update in place because these fare values are only used for overall O-D demand calculation
-                itin_fare_diff = new_fare - old_fare
-                prev_mean_fare = city_pair["Mean_Fare_USD"]
-                city_pair_data.loc[
-                    (city_pair_data["OriginCityID"] == itin["origin"])
-                    & (city_pair_data["DestinationCityID"] == itin["destination"]),
-                    "Mean_Fare_USD"
-                ] = (
-                    (prev_mean_fare * city_pair["Seat_Flights_perYear"])
-                    + (itin_fare_diff * itin["seat_flights_per_year"])
-                ) / city_pair["Seat_Flights_perYear"]
-
-        # update demand for all O-D pairs
-        for idx, city_pair in city_pair_data.iterrows():
-            city_pair_data.loc[idx, "Total_Demand"] = demand.update_od_demand(city_pair)
-
-        # write new columns to dataframes
-        fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
-        demand_iters[f"iter{iteration}"] = city_pair_data["Total_Demand"]
-
-        # write dataframes to files
-        fare_iters.to_csv(os.path.join(save_folder_path, "fare_iters.csv"), index=False)
-        demand_iters.to_csv(os.path.join(save_folder_path, "demand_iters.csv"), index=False)
-
-        # check convergence
-        if iteration > 0:
-            diff = abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"])
-            max_diff = diff.max()
-            mean_diff = diff.mean()
-            print(f"        Maximum demand shift: {max_diff}")
-            print(f"        Mean demand shift: {mean_diff}")
-            
-            if max_diff < demand_tolerance:
-                print(f"        Converged after {iteration} iterations")
-                break
-
-    return airline_routes, city_pair_data, fare_iters, demand_iters
+    return airline_routes, city_pair_data
 
 
 def maximise_itin_profit(
@@ -759,7 +710,8 @@ def maximise_itin_profit(
     city_pair_data: pd.DataFrame,
     city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
-    max_fare: float
+    max_fare: float,
+    FuelCost_USDperGallon: float,
 ) -> float:
     """
     Maximise profit for a given itinerary by adjusting fare
@@ -783,6 +735,7 @@ def maximise_itin_profit(
             destination,
             fleet_df,
             aircraft_data,
+            FuelCost_USDperGallon,
         )
 
     result = minimize_scalar(objective, bounds=fare_bounds, method="bounded")
@@ -798,6 +751,7 @@ def itin_profit(
     destination: pd.Series,
     fleet_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
+    FuelCost_USDperGallon: float,
     add_city_pair_seat_flights: int | None = None,
     add_city_pair_exp_utility: float | None = None,
     add_itin_seat_flights: int | None = None,
@@ -820,8 +774,6 @@ def itin_profit(
         airline_route["seat_flights_per_year"] += add_itin_seat_flights
     if add_itin_exp_utility is not None:
         airline_route["exp_utility"] += add_itin_exp_utility
-
-    FuelCost_USDperGallon = 1.5  # PLACEHOLDER
 
     # update city_pair mean fare (weighted by seats available not seats filled)
     total_revenue = city_pair["Mean_Fare_USD"] * city_pair["Seat_Flights_perYear"]
@@ -860,7 +812,8 @@ def reassign_ac_for_profit(
     city_data: pd.DataFrame,
     city_lookup: list,
     aircraft_data: pd.DataFrame,
-    demand_coefficients: dict[str, float]
+    demand_coefficients: dict[str, float],
+    FuelCost_USDperGallon: float,
 ) -> tuple[
     list[pd.DataFrame],
     list[pd.DataFrame],
@@ -882,6 +835,7 @@ def reassign_ac_for_profit(
     city_lookup : list
     aircraft_data : pd.DataFrame
     demand_coefficients : dict
+    FuelCost_USDperGallon : float
 
     Returns
     -------
@@ -951,7 +905,8 @@ def reassign_ac_for_profit(
                         city_data.loc[out_itin["origin"]],
                         city_data.loc[out_itin["destination"]],
                         airline_fleets[airline_id],
-                        aircraft_data
+                        aircraft_data,
+                        FuelCost_USDperGallon,
                     ) + itin_profit(
                         in_itin["fare"],
                         in_itin,
@@ -959,7 +914,8 @@ def reassign_ac_for_profit(
                         city_data.loc[out_itin["destination"]],
                         city_data.loc[out_itin["origin"]],
                         airline_fleets[airline_id],
-                        aircraft_data
+                        aircraft_data,
+                        FuelCost_USDperGallon,
                     )
                 ) / itin_seats
             )
@@ -1065,6 +1021,7 @@ def reassign_ac_for_profit(
                         destination,
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                         add_city_pair_seat_flights = -seat_flights_per_year,
                         add_city_pair_exp_utility = reassign_itin_out["exp_utility"] - reassign_itin_out["exp_utility"],
                     ) + itin_profit(
@@ -1075,6 +1032,7 @@ def reassign_ac_for_profit(
                         origin,
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                         add_city_pair_seat_flights=-seat_flights_per_year,
                         add_city_pair_exp_utility=reassign_itin_in["exp_utility"] - reassign_itin_in["exp_utility"],
                     )
@@ -1178,6 +1136,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[destination_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                     ) + itin_profit(
                                         test_itin_in["fare"].iloc[0],
                                         test_itin_in.iloc[0],
@@ -1186,6 +1145,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[origin_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                     )
                                 ) / itin_seats
 
@@ -1242,6 +1202,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[destination_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                         add_city_pair_seat_flights=seat_flights_per_year,
                                         add_city_pair_exp_utility=(
                                             test_itin_out["exp_utility"].iloc[0]
@@ -1255,6 +1216,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[origin_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                         add_city_pair_seat_flights=seat_flights_per_year,
                                         add_city_pair_exp_utility=(
                                             test_itin_in["exp_utility"].iloc[0]
@@ -1325,6 +1287,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[destination_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                         add_city_pair_seat_flights=seat_flights_per_year,
                                         add_city_pair_exp_utility=test_itin_out_exp_utility
                                     ) + itin_profit(
@@ -1335,6 +1298,7 @@ def reassign_ac_for_profit(
                                         city_data.loc[origin_id],
                                         airline_fleets[airline_id],
                                         aircraft_data,
+                                        FuelCost_USDperGallon,
                                         add_city_pair_seat_flights=seat_flights_per_year,
                                         add_city_pair_exp_utility=test_itin_in_exp_utility
                                     )
@@ -1637,6 +1601,7 @@ def reassign_ac_for_profit(
                             city_data.loc[reassign_itin_out["destination"]],
                             airline_fleets[airline_id],
                             aircraft_data,
+                            FuelCost_USDperGallon,
                             # city_pair_data is already updated
                         ) + itin_profit(
                             updated_reassign_itin_in["fare"].iloc[0],
@@ -1646,6 +1611,7 @@ def reassign_ac_for_profit(
                             city_data.loc[reassign_itin_out["origin"]],
                             airline_fleets[airline_id],
                             aircraft_data,
+                            FuelCost_USDperGallon,
                             # city_pair_data is already updated
                         )
                     ) / itin_seats
@@ -1686,6 +1652,7 @@ def reassign_ac_for_profit(
                         city_data.loc[new_destination],
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                         # city_pair_data is already updated
                     ) + itin_profit(
                         updated_new_itin_in["fare"].iloc[0],
@@ -1695,6 +1662,7 @@ def reassign_ac_for_profit(
                         city_data.loc[new_origin],
                         airline_fleets[airline_id],
                         aircraft_data,
+                        FuelCost_USDperGallon,
                         # city_pair_data is already updated
                     )
                 ) / itin_seats

@@ -4,6 +4,7 @@ import city
 import route
 import airline
 import aircraft
+import simulator
 import random
 import pickle
 
@@ -111,7 +112,7 @@ def main():
 
         price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
         income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
-        # import DemandCoefficients.csv as dict where first row is keys and second row is values
+        fuel_data = pd.read_csv(os.path.join(data_path, "FuelProjection.csv"))
         with open(os.path.join(data_path, "DemandCoefficients.csv"), "r", encoding='utf-8-sig') as f:
             demand_coefficients = dict(zip(f.readline().strip().split(","), map(float, f.readline().strip().split(","))))
         
@@ -181,9 +182,13 @@ def main():
                     demand_coefficients,
                 )
             )
+
             print("    Checking airport capacity limits...")
             if len(capacity_flag_list) > 0:
                 print(f"    Limits exceeded for {len(capacity_flag_list)} city/cities. Reassigning fleets...")
+                FuelCost_USDperGallon = fuel_data.loc[
+                    fuel_data["Year"] == run_parameters["StartYear"], "Price_USD_per_Gallon"
+                ].values[0]
                 (
                     airline_fleets,
                     airline_routes,
@@ -198,7 +203,8 @@ def main():
                     city_data,
                     city_lookup,
                     capacity_flag_list,
-                    demand_coefficients
+                    demand_coefficients,
+                    FuelCost_USDperGallon,
                 )
             else:
                 print("    No capacity limits exceeded.")
@@ -212,36 +218,25 @@ def main():
                 pickle.dump(airline_fleets, f)
             with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
                 pickle.dump(airline_routes, f)
-
         
-        # simulate base year
-        print("    Simulating base year...")
-
-        # arbitrary numbers for testing
-        maxiters = 10
-        demand_tolerance = 100.0
-        max_fare = 50000.0
-
-        airline_routes, city_pair_data, fare_iters, demand_iters = airline.optimise_fares(
+        # run simulation
+        simulator.run_simulation(
             airlines,
-            airline_routes,
             airline_fleets,
-            city_pair_data,
+            airline_routes,
             city_data,
+            city_pair_data,
+            city_lookup,
             aircraft_data,
-            max_fare,
-            maxiters,
-            demand_tolerance,
-            save_folder_path
+            demand_coefficients,
+            run_parameters["PopulationElasticity"],
+            population_data,
+            income_data,
+            fuel_data,
+            save_folder_path,
+            run_parameters["StartYear"],
+            run_parameters["EndYear"],
         )
-
-
-        # derive correction factors
-
-
-        # iterate over desired years
-
-
 
     return 0
 
