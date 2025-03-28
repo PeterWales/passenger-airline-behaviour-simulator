@@ -603,14 +603,14 @@ def reassign_ac_to_new_route(
     op_hrs_per_year: float,
 ):
     """
-    Reassign an aircraft to a new route and make the necessary adjustments to all dataframes.
+    Reassign an aircraft to a new route (or ground it) and make the necessary adjustments to all dataframes.
 
     Parameters
     ----------
     new_origin : int
-        ID of the new origin city for the aircraft
+        ID of the new origin city for the aircraft, or -1 if aircraft is being grounded
     new_destination : int
-        ID of the new destination city for the aircraft
+        ID of the new destination city for the aircraft, or -1 if aircraft is being grounded
     out_reassign_mask : pd.Series
         Mask for the outbound itinerary the aircraft is being removed from
     in_reassign_mask : pd.Series
@@ -649,15 +649,21 @@ def reassign_ac_to_new_route(
     city_data : pd.DataFrame
     city_pair_data : pd.DataFrame
     """
+    if new_origin == -1:
+        grounding = True
+    else:
+        grounding = False
+
+    if not grounding:
     # routes that the aircraft is being added to
-    new_city_pair_out = city_pair_data[
-        (city_pair_data["OriginCityID"] == new_origin)
-        & (city_pair_data["DestinationCityID"] == new_destination)
-    ].iloc[0]
-    new_city_pair_in = city_pair_data[
-        (city_pair_data["OriginCityID"] == new_destination)
-        & (city_pair_data["DestinationCityID"] == new_origin)
-    ].iloc[0]
+        new_city_pair_out = city_pair_data[
+            (city_pair_data["OriginCityID"] == new_origin)
+            & (city_pair_data["DestinationCityID"] == new_destination)
+        ].iloc[0]
+        new_city_pair_in = city_pair_data[
+            (city_pair_data["OriginCityID"] == new_destination)
+            & (city_pair_data["DestinationCityID"] == new_origin)
+        ].iloc[0]
     
     # save old exp(utility) for calculating deltas for city_pair_data
     reassign_old_utility_out = reassign_itin_out["exp_utility"]
@@ -674,16 +680,17 @@ def reassign_ac_to_new_route(
         & (city_pair_data["DestinationCityID"] == reassign_itin_in["destination"]),
         "Seat_Flights_perYear"
     ] -= reassign_ac["Flights_perYear"] * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_origin)
-        & (city_pair_data["DestinationCityID"] == new_destination),
-        "Seat_Flights_perYear"
-    ] += addnl_seat_flights_per_year
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_destination)
-        & (city_pair_data["DestinationCityID"] == new_origin),
-        "Seat_Flights_perYear"
-    ] += addnl_seat_flights_per_year
+    if not grounding:
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_origin)
+            & (city_pair_data["DestinationCityID"] == new_destination),
+            "Seat_Flights_perYear"
+        ] += addnl_seat_flights_per_year
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_destination)
+            & (city_pair_data["DestinationCityID"] == new_origin),
+            "Seat_Flights_perYear"
+        ] += addnl_seat_flights_per_year
 
     # adjust aircraft data in airline_fleets
     airline_fleets[airline_id].loc[
@@ -742,128 +749,130 @@ def reassign_ac_to_new_route(
     reassign_delta_exp_utility_out = airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"].iloc[0] - reassign_old_utility_out
     reassign_delta_exp_utility_in = airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"].iloc[0] - reassign_old_utility_in
 
-    # check whether new itinerary already exists
-    if not airline_routes[airline_id][
-        (airline_routes[airline_id]["origin"] == new_origin)
-        & (airline_routes[airline_id]["destination"] == new_destination)
-        & (airline_routes[airline_id]["fuel_stop"] == -1)
-    ].empty:
-        # airline already flies this route
-        out_itin_mask = (
+    if not grounding:
+        # check whether new itinerary already exists
+        if not airline_routes[airline_id][
             (airline_routes[airline_id]["origin"] == new_origin)
             & (airline_routes[airline_id]["destination"] == new_destination)
             & (airline_routes[airline_id]["fuel_stop"] == -1)
-        )
-        in_itin_mask = (
-            (airline_routes[airline_id]["origin"] == new_destination)
-            & (airline_routes[airline_id]["destination"] == new_origin)
-            & (airline_routes[airline_id]["fuel_stop"] == -1)
-        )
+        ].empty:
+            # airline already flies this route
+            out_itin_mask = (
+                (airline_routes[airline_id]["origin"] == new_origin)
+                & (airline_routes[airline_id]["destination"] == new_destination)
+                & (airline_routes[airline_id]["fuel_stop"] == -1)
+            )
+            in_itin_mask = (
+                (airline_routes[airline_id]["origin"] == new_destination)
+                & (airline_routes[airline_id]["destination"] == new_origin)
+                & (airline_routes[airline_id]["fuel_stop"] == -1)
+            )
 
-        # save old exp(utility) for calculating deltas for city_pair_data
-        itin_old_utility_out = airline_routes[airline_id].loc[out_itin_mask, "exp_utility"].iloc[0]
-        itin_old_utility_in = airline_routes[airline_id].loc[in_itin_mask, "exp_utility"].iloc[0]
+            # save old exp(utility) for calculating deltas for city_pair_data
+            itin_old_utility_out = airline_routes[airline_id].loc[out_itin_mask, "exp_utility"].iloc[0]
+            itin_old_utility_in = airline_routes[airline_id].loc[in_itin_mask, "exp_utility"].iloc[0]
 
-        # add aircraft to new airline itinerary
-        airline_routes[airline_id].loc[out_itin_mask, "aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
-        airline_routes[airline_id].loc[in_itin_mask, "aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
-        airline_routes[airline_id].loc[out_itin_mask, "flights_per_year"] += addnl_flights_per_year
-        airline_routes[airline_id].loc[in_itin_mask, "flights_per_year"] += addnl_flights_per_year
-        airline_routes[airline_id].loc[out_itin_mask, "seat_flights_per_year"] += addnl_seat_flights_per_year
-        airline_routes[airline_id].loc[in_itin_mask, "seat_flights_per_year"] += addnl_seat_flights_per_year
-        new_itin_time_out = acft.calc_itin_time(
-            airline_routes[airline_id].loc[out_itin_mask].iloc[0],
-            city_data,
-            city_pair_data,
-            aircraft_data,
-            airline_fleets[airline_id],
-        )
-        new_itin_time_in = acft.calc_itin_time(
-            airline_routes[airline_id].loc[in_itin_mask].iloc[0],
-            city_data,
-            city_pair_data,
-            aircraft_data,
-            airline_fleets[airline_id],
-        )
-        airline_routes[airline_id].loc[out_itin_mask, "exp_utility"] = demand.calc_exp_utility(
-            demand_coefficients,
-            airline_routes[airline_id].loc[out_itin_mask, "fare"].iloc[0],
-            new_itin_time_out,
-            airline_routes[airline_id].loc[out_itin_mask, "flights_per_year"].iloc[0],
-            -1
-        )
-        airline_routes[airline_id].loc[in_itin_mask, "exp_utility"] = demand.calc_exp_utility(
-            demand_coefficients,
-            airline_routes[airline_id].loc[in_itin_mask, "fare"].iloc[0],
-            new_itin_time_in,
-            airline_routes[airline_id].loc[in_itin_mask, "flights_per_year"].iloc[0],
-            -1
-        )
+            # add aircraft to new airline itinerary
+            airline_routes[airline_id].loc[out_itin_mask, "aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
+            airline_routes[airline_id].loc[in_itin_mask, "aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
+            airline_routes[airline_id].loc[out_itin_mask, "flights_per_year"] += addnl_flights_per_year
+            airline_routes[airline_id].loc[in_itin_mask, "flights_per_year"] += addnl_flights_per_year
+            airline_routes[airline_id].loc[out_itin_mask, "seat_flights_per_year"] += addnl_seat_flights_per_year
+            airline_routes[airline_id].loc[in_itin_mask, "seat_flights_per_year"] += addnl_seat_flights_per_year
+            new_itin_time_out = acft.calc_itin_time(
+                airline_routes[airline_id].loc[out_itin_mask].iloc[0],
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+            new_itin_time_in = acft.calc_itin_time(
+                airline_routes[airline_id].loc[in_itin_mask].iloc[0],
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+            airline_routes[airline_id].loc[out_itin_mask, "exp_utility"] = demand.calc_exp_utility(
+                demand_coefficients,
+                airline_routes[airline_id].loc[out_itin_mask, "fare"].iloc[0],
+                new_itin_time_out,
+                airline_routes[airline_id].loc[out_itin_mask, "flights_per_year"].iloc[0],
+                -1
+            )
+            airline_routes[airline_id].loc[in_itin_mask, "exp_utility"] = demand.calc_exp_utility(
+                demand_coefficients,
+                airline_routes[airline_id].loc[in_itin_mask, "fare"].iloc[0],
+                new_itin_time_in,
+                airline_routes[airline_id].loc[in_itin_mask, "flights_per_year"].iloc[0],
+                -1
+            )
 
-        # calculate exp(utility) deltas for city_pair_data
-        itin_delta_exp_utility_out = airline_routes[airline_id].loc[out_itin_mask, "exp_utility"].iloc[0] - itin_old_utility_out
-        itin_delta_exp_utility_in = airline_routes[airline_id].loc[in_itin_mask, "exp_utility"].iloc[0] - itin_old_utility_in
-    else:
-        # airline doesn't already fly this route
-        new_itin_out = {
-            "origin": new_origin,
-            "destination": new_destination,
-            "fare": new_city_pair_out["Mean_Fare_USD"],
-            "aircraft_ids": [reassign_ac["AircraftID"]],
-            "flights_per_year": addnl_flights_per_year,
-            "seat_flights_per_year": addnl_seat_flights_per_year,
-            "exp_utility": 0.0,  # calculated later
-            "fuel_stop": -1
-        }
-        new_itin_in = {
-            "origin": new_destination,
-            "destination": new_origin,
-            "fare": new_city_pair_in["Mean_Fare_USD"],
-            "aircraft_ids": [reassign_ac["AircraftID"]],
-            "flights_per_year": addnl_flights_per_year,
-            "seat_flights_per_year": addnl_seat_flights_per_year,
-            "exp_utility": 0.0,  # calculated later
-            "fuel_stop": -1
-        }
-        new_itin_out = pd.Series(new_itin_out)
-        new_itin_in = pd.Series(new_itin_in)
-        new_itin_out_exp_utility = demand.calc_exp_utility(
-            demand_coefficients,
-            new_itin_out["fare"],
-            new_itin_time_out,
-            addnl_flights_per_year,
-            -1
-        )
-        new_itin_in_exp_utility = demand.calc_exp_utility(
-            demand_coefficients,
-            new_itin_in["fare"],
-            new_itin_time_in,
-            addnl_flights_per_year,
-            -1
-        )
-        new_itin_out["exp_utility"] = new_itin_out_exp_utility
-        new_itin_in["exp_utility"] = new_itin_in_exp_utility
-        airline_routes[airline_id] = pd.concat(
-            [
-                airline_routes[airline_id],
-                pd.DataFrame([new_itin_out]),
-                pd.DataFrame([new_itin_in])
-            ],
-            ignore_index=True,
-            axis=0  # specify row-wise concatenation
-        )
+            # calculate exp(utility) deltas for city_pair_data
+            itin_delta_exp_utility_out = airline_routes[airline_id].loc[out_itin_mask, "exp_utility"].iloc[0] - itin_old_utility_out
+            itin_delta_exp_utility_in = airline_routes[airline_id].loc[in_itin_mask, "exp_utility"].iloc[0] - itin_old_utility_in
+        else:
+            # airline doesn't already fly this route
+            new_itin_out = {
+                "origin": new_origin,
+                "destination": new_destination,
+                "fare": new_city_pair_out["Mean_Fare_USD"],
+                "aircraft_ids": [reassign_ac["AircraftID"]],
+                "flights_per_year": addnl_flights_per_year,
+                "seat_flights_per_year": addnl_seat_flights_per_year,
+                "exp_utility": 0.0,  # calculated later
+                "fuel_stop": -1
+            }
+            new_itin_in = {
+                "origin": new_destination,
+                "destination": new_origin,
+                "fare": new_city_pair_in["Mean_Fare_USD"],
+                "aircraft_ids": [reassign_ac["AircraftID"]],
+                "flights_per_year": addnl_flights_per_year,
+                "seat_flights_per_year": addnl_seat_flights_per_year,
+                "exp_utility": 0.0,  # calculated later
+                "fuel_stop": -1
+            }
+            new_itin_out = pd.Series(new_itin_out)
+            new_itin_in = pd.Series(new_itin_in)
+            new_itin_out_exp_utility = demand.calc_exp_utility(
+                demand_coefficients,
+                new_itin_out["fare"],
+                new_itin_time_out,
+                addnl_flights_per_year,
+                -1
+            )
+            new_itin_in_exp_utility = demand.calc_exp_utility(
+                demand_coefficients,
+                new_itin_in["fare"],
+                new_itin_time_in,
+                addnl_flights_per_year,
+                -1
+            )
+            new_itin_out["exp_utility"] = new_itin_out_exp_utility
+            new_itin_in["exp_utility"] = new_itin_in_exp_utility
+            airline_routes[airline_id] = pd.concat(
+                [
+                    airline_routes[airline_id],
+                    pd.DataFrame([new_itin_out]),
+                    pd.DataFrame([new_itin_in])
+                ],
+                ignore_index=True,
+                axis=0  # specify row-wise concatenation
+            )
 
-        # calculate exp(utility) deltas for city_pair_data (previous utility was zero)
-        itin_delta_exp_utility_out = new_itin_out_exp_utility
-        itin_delta_exp_utility_in = new_itin_in_exp_utility
+            # calculate exp(utility) deltas for city_pair_data (previous utility was zero)
+            itin_delta_exp_utility_out = new_itin_out_exp_utility
+            itin_delta_exp_utility_in = new_itin_in_exp_utility
 
     # adjust city_data movements
     city_data.loc[reassign_itin_out["origin"], "Movts_perHr"] -= 2.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
     city_data.loc[reassign_itin_out["destination"], "Movts_perHr"] -= 2.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
     if reassign_itin_out["fuel_stop"] != -1:
         city_data.loc[reassign_itin_out["fuel_stop"], "Movts_perHr"] -= 4.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
-    city_data.loc[new_origin, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
-    city_data.loc[new_destination, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
+    if not grounding:
+        city_data.loc[new_origin, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
+        city_data.loc[new_destination, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
 
     # adjust city_pair_data Exp_Utility_Sum
     city_pair_data.loc[
@@ -876,16 +885,17 @@ def reassign_ac_to_new_route(
         & (city_pair_data["DestinationCityID"] == reassign_itin_out["origin"]),
         "Exp_Utility_Sum"
     ] += reassign_delta_exp_utility_in
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_origin)
-        & (city_pair_data["DestinationCityID"] == new_destination),
-        "Exp_Utility_Sum"
-    ] += itin_delta_exp_utility_out
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_destination)
-        & (city_pair_data["DestinationCityID"] == new_origin),
-        "Exp_Utility_Sum"
-    ] += itin_delta_exp_utility_in
+    if not grounding:
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_origin)
+            & (city_pair_data["DestinationCityID"] == new_destination),
+            "Exp_Utility_Sum"
+        ] += itin_delta_exp_utility_out
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_destination)
+            & (city_pair_data["DestinationCityID"] == new_origin),
+            "Exp_Utility_Sum"
+        ] += itin_delta_exp_utility_in
 
     return airline_routes, airline_fleets, city_data, city_pair_data
 
@@ -914,9 +924,9 @@ def update_profit_tracker(
     rtn_flt_df : pd.DataFrame
         DataFrame of all itineraries for an airline and their profit per seat and aircraft IDs
     new_origin : int
-        ID of the new origin city for the aircraft
+        ID of the new origin city for the aircraft, or -1 if aircraft is being grounded
     new_destination : int
-        ID of the new destination city for the aircraft
+        ID of the new destination city for the aircraft, or -1 if aircraft is being grounded
     out_reassign_mask : pd.Series
         Mask for the outbound itinerary the aircraft is being removed from
     in_reassign_mask : pd.Series
@@ -944,22 +954,28 @@ def update_profit_tracker(
     -------
     rtn_flt_df : pd.DataFrame
     """
-    # check if itinerary already exists in rtn_flt_df
-    if rtn_flt_df[
-        (rtn_flt_df["Origin"] == reassign_itin_out["origin"])
-        & (rtn_flt_df["Destination"] == reassign_itin_out["destination"])
-        & (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"])
-    ].empty:
-        # add itinerary to rtn_flt_df
-        new_itin_dict = {
-            "Origin": new_origin,
-            "Destination": new_destination,
-            "Fuel_Stop": -1,
-            "Profit_perSeat": 0,  # recalculated later
-            "Aircraft_IDs": [reassign_ac["AircraftID"]]
-        }
-        new_itin_df = pd.DataFrame(new_itin_dict)
-        rtn_flt_df = pd.concat([rtn_flt_df, new_itin_df], ignore_index=True)
+    if new_origin == -1:
+        grounding = True
+    else:
+        grounding = False
+
+    if not grounding:
+        # check if new itinerary already exists in rtn_flt_df
+        if rtn_flt_df[
+            (rtn_flt_df["Origin"] == new_origin)
+            & (rtn_flt_df["Destination"] == new_destination)
+            & (rtn_flt_df["Fuel_Stop"] == -1)
+        ].empty:
+            # add itinerary to rtn_flt_df
+            new_itin_dict = {
+                "Origin": new_origin,
+                "Destination": new_destination,
+                "Fuel_Stop": -1,
+                "Profit_perSeat": 0,  # recalculated later
+                "Aircraft_IDs": [reassign_ac["AircraftID"]]
+            }
+            new_itin_df = pd.DataFrame(new_itin_dict)
+            rtn_flt_df = pd.concat([rtn_flt_df, new_itin_df], ignore_index=True)
 
     # recalculate profit per seat of altered itineraries
     updated_reassign_itin_out = airline_routes[airline_id].loc[out_reassign_mask]
@@ -968,7 +984,7 @@ def update_profit_tracker(
         (city_pair_data["OriginCityID"] == reassign_itin_out["origin"])
         & (city_pair_data["DestinationCityID"] == reassign_itin_out["destination"])
     ].iloc[0]
-    updated_city_pair_in = city_pair_data.loc[
+    updated_reassign_city_pair_in = city_pair_data.loc[
         (city_pair_data["OriginCityID"] == reassign_itin_out["destination"])
         & (city_pair_data["DestinationCityID"] == reassign_itin_out["origin"])
     ].iloc[0]
@@ -1003,7 +1019,7 @@ def update_profit_tracker(
             ) + al.itin_profit(
                 updated_reassign_itin_in["fare"].iloc[0],
                 updated_reassign_itin_in.iloc[0],
-                updated_city_pair_in,
+                updated_reassign_city_pair_in,
                 city_data.loc[reassign_itin_out["destination"]],
                 city_data.loc[reassign_itin_out["origin"]],
                 airline_fleets[airline_id],
@@ -1013,56 +1029,57 @@ def update_profit_tracker(
             )
         ) / itin_seats
 
-    updated_new_itin_out = airline_routes[airline_id].loc[
-        (airline_routes[airline_id]["origin"] == new_origin)
-        & (airline_routes[airline_id]["destination"] == new_destination)
-        & (airline_routes[airline_id]["fuel_stop"] == -1)
-    ]
-    updated_new_itin_in = airline_routes[airline_id].loc[
-        (airline_routes[airline_id]["origin"] == new_destination)
-        & (airline_routes[airline_id]["destination"] == new_origin)
-        & (airline_routes[airline_id]["fuel_stop"] == -1)
-    ]
-    updated_new_city_pair_out = city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_origin)
-        & (city_pair_data["DestinationCityID"] == new_destination)
-    ].iloc[0]
-    updated_city_pair_in = city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == new_destination)
-        & (city_pair_data["DestinationCityID"] == new_origin)
-    ].iloc[0]
-    # calculate sum of all seats that the airline has assigned to this itinerary including reassigned aircraft
-    itin_seats = 0
-    for ac_id in updated_new_itin_out["aircraft_ids"].iloc[0]:
-        itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
-    rtn_flt_df.loc[
-        (rtn_flt_df["Origin"] == new_origin)
-        & (rtn_flt_df["Destination"] == new_destination)
-        & (rtn_flt_df["Fuel_Stop"] == -1),
-        "Profit_perSeat"
-    ] = (
-        al.itin_profit(
-            updated_new_itin_out["fare"].iloc[0],
-            updated_new_itin_out.iloc[0],
-            updated_new_city_pair_out,
-            city_data.loc[new_origin],
-            city_data.loc[new_destination],
-            airline_fleets[airline_id],
-            aircraft_data,
-            FuelCost_USDperGallon,
-            # city_pair_data is already updated
-        ) + al.itin_profit(
-            updated_new_itin_in["fare"].iloc[0],
-            updated_new_itin_in.iloc[0],
-            updated_city_pair_in,
-            city_data.loc[new_destination],
-            city_data.loc[new_origin],
-            airline_fleets[airline_id],
-            aircraft_data,
-            FuelCost_USDperGallon,
-            # city_pair_data is already updated
-        )
-    ) / itin_seats
+    if not grounding:
+        updated_new_itin_out = airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == new_origin)
+            & (airline_routes[airline_id]["destination"] == new_destination)
+            & (airline_routes[airline_id]["fuel_stop"] == -1)
+        ]
+        updated_new_itin_in = airline_routes[airline_id].loc[
+            (airline_routes[airline_id]["origin"] == new_destination)
+            & (airline_routes[airline_id]["destination"] == new_origin)
+            & (airline_routes[airline_id]["fuel_stop"] == -1)
+        ]
+        updated_new_city_pair_out = city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_origin)
+            & (city_pair_data["DestinationCityID"] == new_destination)
+        ].iloc[0]
+        updated_city_pair_in = city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == new_destination)
+            & (city_pair_data["DestinationCityID"] == new_origin)
+        ].iloc[0]
+        # calculate sum of all seats that the airline has assigned to this itinerary including reassigned aircraft
+        itin_seats = 0
+        for ac_id in updated_new_itin_out["aircraft_ids"].iloc[0]:
+            itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
+        rtn_flt_df.loc[
+            (rtn_flt_df["Origin"] == new_origin)
+            & (rtn_flt_df["Destination"] == new_destination)
+            & (rtn_flt_df["Fuel_Stop"] == -1),
+            "Profit_perSeat"
+        ] = (
+            al.itin_profit(
+                updated_new_itin_out["fare"].iloc[0],
+                updated_new_itin_out.iloc[0],
+                updated_new_city_pair_out,
+                city_data.loc[new_origin],
+                city_data.loc[new_destination],
+                airline_fleets[airline_id],
+                aircraft_data,
+                FuelCost_USDperGallon,
+                # city_pair_data is already updated
+            ) + al.itin_profit(
+                updated_new_itin_in["fare"].iloc[0],
+                updated_new_itin_in.iloc[0],
+                updated_city_pair_in,
+                city_data.loc[new_destination],
+                city_data.loc[new_origin],
+                airline_fleets[airline_id],
+                aircraft_data,
+                FuelCost_USDperGallon,
+                # city_pair_data is already updated
+            )
+        ) / itin_seats
 
     # move reassigned aircraft in rtn_flt_df
     rtn_flt_df.loc[
@@ -1071,13 +1088,14 @@ def update_profit_tracker(
         & (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"]),
         "Aircraft_IDs"
     ].iloc[0].remove(reassign_ac["AircraftID"])
-    # aircraft will already exist in new itinerary if it is new to the airline
-    rtn_flt_new_itin_mask = (
-        (rtn_flt_df["Origin"] == new_origin)
-        & (rtn_flt_df["Destination"] == new_destination)
-        & (rtn_flt_df["Fuel_Stop"] == -1)
-    )
-    if reassign_ac["AircraftID"] not in rtn_flt_df.loc[rtn_flt_new_itin_mask, "Aircraft_IDs"].iloc[0]:
-        rtn_flt_df.loc[rtn_flt_new_itin_mask, "Aircraft_IDs"].iloc[0].append(reassign_ac["AircraftID"])
+    if not grounding:
+        rtn_flt_new_itin_mask = (
+            (rtn_flt_df["Origin"] == new_origin)
+            & (rtn_flt_df["Destination"] == new_destination)
+            & (rtn_flt_df["Fuel_Stop"] == -1)
+        )
+        # aircraft will already exist in new itinerary if it is new to the airline
+        if reassign_ac["AircraftID"] not in rtn_flt_df.loc[rtn_flt_new_itin_mask, "Aircraft_IDs"].iloc[0]:
+            rtn_flt_df.loc[rtn_flt_new_itin_mask, "Aircraft_IDs"].iloc[0].append(reassign_ac["AircraftID"])
     
     return rtn_flt_df

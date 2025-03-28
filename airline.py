@@ -834,8 +834,12 @@ def reassign_ac_for_profit(
 ]:
     """
     Reassign aircraft to different routes to maximise profit per seat
-    Airline by airline, starts with the least profitable route and reassigns aircraft to the most profitable alternative route
-    Stops when the least profitable aircraft can't be reassigned to a more profitable route
+    
+    - Airline by airline, starts with the least profitable route and reassigns aircraft to the most profitable alternative route
+    - Stops when the least profitable aircraft can't be reassigned to a more profitable route
+    - If an aircraft is making negative profit and can't be reassigned to a more profitable route, it is grounded
+    - If an aircraft grounded in the previous year can't be assigned to a profitable route, the lease is ended
+    - If an airline has no grounded aircraft the previous year and current year, it has the opportunity to lease new aircraft
 
     Parameters
     ----------
@@ -859,7 +863,6 @@ def reassign_ac_for_profit(
     # TODO: - address the issue of the order of airlines giving some an advantage over others
     #       - check each size class seperately
     #       - consider moving aircraft to routes with fuel stops
-    #       - consider grounding aircraft with negative profit and testing grounded aircraft on alternative routes
 
     op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
 
@@ -1010,5 +1013,98 @@ def reassign_ac_for_profit(
             else:
                 # if no beneficial change can be made, finished = True
                 finished = True
+            
+        # deal with grounding and leases where appropriate
+        rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
+        # check whether any itineraries are making negative profit
+        if rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0:
+            # end lease on all currently grounded aircraft
+            for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
+                # remove aircraft from airline_fleets
+                airline_fleets[airline_id] = airline_fleets[airline_id][
+                    airline_fleets[airline_id]["AircraftID"] != ac_idx
+                ]
+            airlines.loc[airline_id, "Grounded_acft"] = []
+
+            # ground aircraft that are making negative profit
+            while rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0:
+                reassign_row = rtn_flt_df.iloc[0]  # least profitable itinerary
+                reassign_itin_out = airline_routes[airline_id].loc[
+                    (airline_routes[airline_id]["origin"] == reassign_row["Origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_row["Destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_row["Fuel_Stop"])
+                ].iloc[0]
+                reassign_itin_in = airline_routes[airline_id].loc[
+                    (airline_routes[airline_id]["origin"] == reassign_row["Destination"])
+                    & (airline_routes[airline_id]["destination"] == reassign_row["Origin"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_row["Fuel_Stop"])
+                ].iloc[0]
+                reassign_old_profit_per_seat = reassign_row["Profit_perSeat"]
+
+                # choose largest aircraft on route to reassign
+                itin_aircraft_ids = reassign_row["Aircraft_IDs"]
+                itin_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(itin_aircraft_ids)]
+                itin_ac.sort_values(["SizeClass", "Age_years"], ascending=[False, False], inplace=True)
+                reassign_ac = itin_ac.iloc[0]  # largest aircraft only
+
+                # ground aircraft
+                out_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_out["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_out["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_out["fuel_stop"])
+                )
+                in_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_in["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_in["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_in["fuel_stop"])
+                )
+                (
+                    airline_routes,
+                    airline_fleets,
+                    city_data,
+                    city_pair_data,
+                ) = reassignment.reassign_ac_to_new_route(
+                    -1,
+                    -1,
+                    out_reassign_mask,
+                    in_reassign_mask,
+                    reassign_itin_out,
+                    reassign_itin_in,
+                    reassign_ac,
+                    0,
+                    0,
+                    city_pair_data,
+                    city_data,
+                    airline_routes,
+                    airline_id,
+                    airline_fleets,
+                    aircraft_data,
+                    demand_coefficients,
+                    op_hrs_per_year,
+                )
+
+                # update rtn_flt_df
+                rtn_flt_df = reassignment.update_profit_tracker(
+                    rtn_flt_df,
+                    new_origin,
+                    new_destination,
+                    out_reassign_mask,
+                    in_reassign_mask,
+                    reassign_itin_out,
+                    reassign_ac,
+                    airline_routes,
+                    airline_fleets,
+                    airline_id,
+                    city_pair_data,
+                    city_data,
+                    aircraft_data,
+                    FuelCost_USDperGallon,
+                )
+
+                # reorder rtn_flt_df
+                rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
+
+
+                
 
     return airline_routes, airline_fleets, city_pair_data, city_data
