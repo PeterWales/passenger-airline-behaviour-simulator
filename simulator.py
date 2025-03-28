@@ -162,4 +162,5 @@ def run_simulation(
             aircraft_data,
             demand_coefficients,
             FuelCost_USDperGallon,
+            year,
         )
