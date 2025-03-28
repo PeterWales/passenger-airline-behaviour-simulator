@@ -193,7 +193,8 @@ def main():
                     airline_fleets,
                     airline_routes,
                     city_pair_data,
-                    city_data
+                    city_data,
+                    airlines,
                 ) = city.enforce_capacity(
                     airlines,
                     airline_fleets,

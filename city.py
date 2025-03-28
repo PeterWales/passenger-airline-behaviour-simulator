@@ -291,6 +291,7 @@ def enforce_capacity(
     airline_routes : list[pd.DataFrame]
     city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
+    airlines : pd.DataFrame
     """
     # TODO: - consider moving fuel stops away from capacity-constrained cities
     #       - add possibility of moving aircraft to routes that require fuel stops
@@ -724,8 +725,9 @@ def enforce_capacity(
                 airline_fleets[airline_id].loc[acft_mask, "RouteDestination"] = -1
                 airline_fleets[airline_id].loc[acft_mask, "FuelStop"] = -1
                 airline_fleets[airline_id].loc[acft_mask, "Flights_perYear"] = 0
+                airlines.loc[airline_id, "Grounded_acft"].append(reassign_ac["AircraftID"])
 
-    return airline_fleets, airline_routes, city_pair_data, city_data
+    return airline_fleets, airline_routes, city_pair_data, city_data, airlines
 
 
 def annual_update(
