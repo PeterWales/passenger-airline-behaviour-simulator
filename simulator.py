@@ -16,11 +16,11 @@ def simulate_base_year(
     FuelCost_USDperGallon: float,
     save_folder_path: str,
     max_fare: float,
+    iteration_limit: int,
 ):
     print(f"    Simulating base year ({year})...")
 
     # parameters for finding Nash equilibrium
-    maxiters = 10
     demand_tolerance = 1000.0
 
     # initialise dataframes tracking convergence
@@ -42,7 +42,7 @@ def simulate_base_year(
     demand_iters["Destination_Longitude"] = city_pair_data["Destination_Longitude"]
     demand_iters["base"] = city_pair_data["Total_Demand"]
 
-    for iteration in range(maxiters):
+    for iteration in range(iteration_limit):
         print(f"        Iteration {iteration+1} of fare optimisation")
 
         # allow airlines to adjust their fares
@@ -92,10 +92,13 @@ def run_simulation(
     income_data: pd.DataFrame,
     fuel_data: pd.DataFrame,
     save_folder_path: str,
-    base_year: int,
-    end_year: int,
+    run_parameters: dict,
 ):
-    max_fare = 50000.0
+    base_year = run_parameters["StartYear"]
+    end_year = run_parameters["EndYear"]
+
+    max_fare = run_parameters["MaxFare"]
+    iteration_limit = run_parameters["BaseIterationLimit"]
 
     FuelCost_USDperGallon = fuel_data.loc[
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
@@ -112,6 +115,7 @@ def run_simulation(
         FuelCost_USDperGallon,
         save_folder_path,
         max_fare,
+        iteration_limit,
     )
 
     # write dataframes to files
