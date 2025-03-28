@@ -1212,7 +1212,7 @@ def reassign_ac_for_profit(
                             # create new aircraft
                             new_ac_dict = {
                                 "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
-                                "SizeClass": aircraft["SizeClass"],
+                                "SizeClass": aircraft.name,
                                 "Age_years": 0,
                                 "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
                                 "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],

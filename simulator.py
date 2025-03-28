@@ -114,6 +114,12 @@ def run_simulation(
         max_fare,
     )
 
+    # write dataframes to files
+    city_data.to_csv(os.path.join(save_folder_path, f"city_data_{base_year}.csv"), index=True)
+    city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{base_year}.csv"), index=False)
+    aircraft_data.to_csv(os.path.join(save_folder_path, f"aircraft_data_{base_year}.csv"), index=True)
+    airlines.to_csv(os.path.join(save_folder_path, f"airlines_{base_year}.csv"), index=False)
+
     # iterate over desired years
     for year in range(base_year + 1, end_year + 1):
         print(f"    Simulating year {year}...")
@@ -164,3 +170,9 @@ def run_simulation(
             FuelCost_USDperGallon,
             year,
         )
+
+        # write dataframes to files
+        city_data.to_csv(os.path.join(save_folder_path, f"city_data_{year}.csv"), index=True)
+        city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{year}.csv"), index=False)
+        aircraft_data.to_csv(os.path.join(save_folder_path, f"aircraft_data_{year}.csv"), index=True)
+        airlines.to_csv(os.path.join(save_folder_path, f"airlines_{year}.csv"), index=False)
