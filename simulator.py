@@ -17,7 +17,7 @@ def simulate_base_year(
     save_folder_path: str,
     max_fare: float,
     iteration_limit: int,
-):
+) -> tuple[list[pd.DataFrame], pd.DataFrame]:
     print(f"    Simulating base year ({year})...")
 
     # parameters for finding Nash equilibrium
@@ -76,6 +76,7 @@ def simulate_base_year(
             if max_diff < demand_tolerance:
                 print(f"        Converged after {iteration} iterations")
                 break
+    return airline_routes, city_pair_data
 
 
 def run_simulation(
@@ -104,7 +105,7 @@ def run_simulation(
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
 
-    simulate_base_year(
+    airline_routes, city_pair_data = simulate_base_year(
         base_year,
         city_data,
         city_pair_data,

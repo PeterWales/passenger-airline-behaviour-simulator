@@ -185,7 +185,7 @@ def main():
 
             print("    Checking airport capacity limits...")
             if len(capacity_flag_list) > 0:
-                print(f"    Limits exceeded for {len(capacity_flag_list)} city/cities. Reassigning fleets...")
+                print(f"        Limits exceeded for {len(capacity_flag_list)} city/cities. Reassigning fleets...")
                 FuelCost_USDperGallon = fuel_data.loc[
                     fuel_data["Year"] == run_parameters["StartYear"], "Price_USD_per_Gallon"
                 ].values[0]

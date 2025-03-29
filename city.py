@@ -15,7 +15,7 @@ def set_base_values(
     country_populations = []
     country_incomes = []
     for _, country in country_data.iterrows():
-        country_id = country["CountryID"]
+        country_id = country["Number"]
         country_populations.append(population_data.loc[population_data["Number"] == country_id, str(base_year)].iloc[0])
         country_incomes.append(income_data.loc[income_data["Number"] == country_id, str(base_year)].iloc[0])
     country_data["BaseYearPopulation"] = country_populations

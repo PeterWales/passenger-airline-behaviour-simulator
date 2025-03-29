@@ -662,6 +662,8 @@ def optimise_fares(
     city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
     aircraft_data : pd.DataFrame
+    max_fare : float
+    FuelCost_USDperGallon : float
 
     Returns
     -------
@@ -674,7 +676,8 @@ def optimise_fares(
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"])
             ].iloc[0]
-            old_fare = itin["fare"]
+            old_fare = copy.deepcopy(itin["fare"])
+            prev_mean_fare = copy.deepcopy(city_pair["Mean_Fare_USD"])
             new_fare = maximise_itin_profit(
                 itin,
                 airline_fleets[airline["Airline_ID"]],
@@ -689,7 +692,6 @@ def optimise_fares(
             # update city_pair_data with new mean fare
             # can update in place because these fare values are only used for overall O-D demand calculation
             itin_fare_diff = new_fare - old_fare
-            prev_mean_fare = city_pair["Mean_Fare_USD"]
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
@@ -774,6 +776,9 @@ def itin_profit(
     if add_itin_exp_utility is not None:
         airline_route["exp_utility"] += add_itin_exp_utility
 
+    old_mean_fare = copy.deepcopy(city_pair["Mean_Fare_USD"])
+    old_total_demand = copy.deepcopy(city_pair["Total_Demand"])
+
     # update city_pair mean fare (weighted by seats available not seats filled)
     total_revenue = city_pair["Mean_Fare_USD"] * city_pair["Seat_Flights_perYear"]
     total_revenue += ((fare - airline_route["fare"]) * airline_route["seat_flights_per_year"])
@@ -781,12 +786,13 @@ def itin_profit(
     city_pair["Total_Demand"] = demand.update_od_demand(city_pair)
 
     # update airline route fare
-    old_fare = airline_route["fare"]
+    old_fare = copy.deepcopy(airline_route["fare"])
     airline_route["fare"] = fare
 
-    # can't sell more tickets than the airline has scheduled
-    annual_itin_demand = demand.update_itinerary_demand(city_pair, airline_route)
-    tickets_sold = min([annual_itin_demand, airline_route["seat_flights_per_year"]])
+    # calculate tickets sold (can't be more than the airline has scheduled or less than zero)
+    tickets_sold = demand.update_itinerary_demand(city_pair, airline_route)
+    tickets_sold = min([tickets_sold, airline_route["seat_flights_per_year"]])
+    tickets_sold = max([0, tickets_sold])
     
     annual_itin_revenue = tickets_sold * airline_route["fare"]
 
@@ -797,13 +803,15 @@ def itin_profit(
         city_pair,
         origin,
         destination,
-        annual_itin_demand,
+        tickets_sold,
         FuelCost_USDperGallon,
     )  # note depends on number of seats sold due to weight
     annual_itin_profit = annual_itin_revenue - annual_itin_cost
 
     # reset dataframes to avoid mutability issues
     airline_route["fare"] = old_fare
+    city_pair["Mean_Fare_USD"] = old_mean_fare
+    city_pair["Total_Demand"] = old_total_demand
     if add_city_pair_seat_flights is not None:
         city_pair["Seat_Flights_perYear"] -= add_city_pair_seat_flights
     if add_city_pair_exp_utility is not None:
