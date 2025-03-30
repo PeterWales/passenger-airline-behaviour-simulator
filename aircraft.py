@@ -396,6 +396,7 @@ def calc_flight_cost(
         itin_demand_share = float(aircraft_type["Seats"] * annual_itin_demand) / total_seats
         pax_perflt_share = math.floor(itin_demand_share / aircraft["Flights_perYear"])
         pax = min([pax_perflt_share, aircraft_type["Seats"]])
+        pax = max([pax, 0])
 
         cost_perflt = (
             calc_op_cost(aircraft_type, city_pair, origin, destination)

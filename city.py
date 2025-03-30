@@ -365,6 +365,7 @@ def enforce_capacity(
                         airline_fleets[airline_id],
                         aircraft_data,
                         FuelCost_USDperGallon,
+                        demand_coefficients,
                     ) + al.itin_profit(
                         in_itin["fare"],
                         in_itin,
@@ -374,6 +375,7 @@ def enforce_capacity(
                         airline_fleets[airline_id],
                         aircraft_data,
                         FuelCost_USDperGallon,
+                        demand_coefficients,
                     )
                 ) / itin_seats
 
@@ -541,6 +543,7 @@ def enforce_capacity(
                         airline_fleets[airline_id],
                         aircraft_data,
                         FuelCost_USDperGallon,
+                        demand_coefficients,
                     ) + al.itin_profit(
                         potential_reassign.iloc[0]["In_Fare"],
                         airline_routes[airline_id].loc[in_al_route_mask].iloc[0],
@@ -550,6 +553,7 @@ def enforce_capacity(
                         airline_fleets[airline_id],
                         aircraft_data,
                         FuelCost_USDperGallon,
+                        demand_coefficients,
                     )
                 ) / itin_seats
                 # reorder potential_reassign by profit (lowest first)

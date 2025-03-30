@@ -13,6 +13,7 @@ def calc_existing_profits(
     aircraft_data: pd.DataFrame,
     fleet_data: pd.DataFrame,
     FuelCost_USDperGallon: float,
+    demand_coefficients,
 ) -> pd.DataFrame:
     """
     Calculate profit per seat for all existing routes of an airline.
@@ -87,6 +88,7 @@ def calc_existing_profits(
                     fleet_data,
                     aircraft_data,
                     FuelCost_USDperGallon,
+                    demand_coefficients,
                 ) + al.itin_profit(
                     in_itin["fare"],
                     in_itin,
@@ -96,6 +98,7 @@ def calc_existing_profits(
                     fleet_data,
                     aircraft_data,
                     FuelCost_USDperGallon,
+                    demand_coefficients,
                 )
             ) / itin_seats
         )
@@ -222,6 +225,7 @@ def profit_after_removal(
                 fleet_df,
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 add_city_pair_seat_flights = -seat_flights_per_year,
                 add_city_pair_exp_utility = reassign_itin_out["exp_utility"] - old_out_exp_utility,
             ) + al.itin_profit(
@@ -233,6 +237,7 @@ def profit_after_removal(
                 fleet_df,
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 add_city_pair_seat_flights = -seat_flights_per_year,
                 add_city_pair_exp_utility = reassign_itin_in["exp_utility"] - old_in_exp_utility,
             )
@@ -402,6 +407,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                             ) + al.itin_profit(
                                 test_itin_in["fare"].iloc[0],
                                 test_itin_in.iloc[0],
@@ -411,6 +417,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                             )
                         ) / itin_seats
 
@@ -465,6 +472,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                                 add_city_pair_seat_flights=seat_flights_per_year,
                                 add_city_pair_exp_utility=(
                                     test_itin_out["exp_utility"].iloc[0]
@@ -479,6 +487,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                                 add_city_pair_seat_flights=seat_flights_per_year,
                                 add_city_pair_exp_utility=(
                                     test_itin_in["exp_utility"].iloc[0]
@@ -550,6 +559,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                                 add_city_pair_seat_flights=seat_flights_per_year,
                                 add_city_pair_exp_utility=test_itin_out_exp_utility
                             ) + al.itin_profit(
@@ -561,6 +571,7 @@ def best_itin_alternative(
                                 fleet_data,
                                 aircraft_data,
                                 FuelCost_USDperGallon,
+                                demand_coefficients,
                                 add_city_pair_seat_flights=seat_flights_per_year,
                                 add_city_pair_exp_utility=test_itin_in_exp_utility
                             )
@@ -933,6 +944,7 @@ def update_profit_tracker(
     city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     FuelCost_USDperGallon: float,
+    demand_coefficients: dict[str, float],
 ) -> pd.DataFrame:
     """
     Update rtn_flt_df with new profit per seat and aircraft IDs after reassigning an aircraft to a different itinerary.
@@ -967,6 +979,8 @@ def update_profit_tracker(
         DataFrame of aircraft data
     FuelCost_USDperGallon : float
         Cost of fuel in USD per gallon
+    demand_coefficients : dict
+        Dictionary of demand coefficients
     
     Returns
     -------
@@ -1033,6 +1047,7 @@ def update_profit_tracker(
                 airline_fleets[airline_id],
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 # city_pair_data is already updated
             ) + al.itin_profit(
                 updated_reassign_itin_in["fare"].iloc[0],
@@ -1043,6 +1058,7 @@ def update_profit_tracker(
                 airline_fleets[airline_id],
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 # city_pair_data is already updated
             )
         ) / itin_seats
@@ -1085,6 +1101,7 @@ def update_profit_tracker(
                 airline_fleets[airline_id],
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 # city_pair_data is already updated
             ) + al.itin_profit(
                 updated_new_itin_in["fare"].iloc[0],
@@ -1095,6 +1112,7 @@ def update_profit_tracker(
                 airline_fleets[airline_id],
                 aircraft_data,
                 FuelCost_USDperGallon,
+                demand_coefficients,
                 # city_pair_data is already updated
             )
         ) / itin_seats

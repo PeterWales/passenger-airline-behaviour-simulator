@@ -1,5 +1,5 @@
 import pandas as pd
-import airline
+import airline as al
 import aircraft
 import city
 import os
@@ -17,6 +17,7 @@ def simulate_base_year(
     save_folder_path: str,
     max_fare: float,
     iteration_limit: int,
+    demand_coefficients: dict[str, float],
 ) -> tuple[list[pd.DataFrame], pd.DataFrame]:
     print(f"    Simulating base year ({year})...")
 
@@ -46,7 +47,7 @@ def simulate_base_year(
         print(f"        Iteration {iteration+1} of fare optimisation")
 
         # allow airlines to adjust their fares
-        airline_routes, city_pair_data = airline.optimise_fares(
+        airline_routes, city_pair_data = al.optimise_fares(
             airlines,
             airline_routes,
             airline_fleets,
@@ -55,6 +56,7 @@ def simulate_base_year(
             aircraft_data,
             max_fare,
             FuelCost_USDperGallon,
+            demand_coefficients,
         )
 
         # write new columns to dataframes
@@ -105,6 +107,23 @@ def run_simulation(
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
 
+    # initialise ["itin_time_hrs"] column in airline_routes
+    for al_idx, airline in airlines.iterrows():
+        airline_routes[al_idx]["itin_time_hrs"] = 0.0
+
+    # update airline itinerary times
+    airline_routes = al.update_itinerary_times(
+        airlines,
+        airline_routes,
+        city_data,
+        city_pair_data,
+        aircraft_data,
+        airline_fleets,
+    )
+
+    # initialise city_pair_data["New_Mean_Fare_USD"]
+    city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"]
+
     airline_routes, city_pair_data = simulate_base_year(
         base_year,
         city_data,
@@ -117,6 +136,7 @@ def run_simulation(
         save_folder_path,
         max_fare,
         iteration_limit,
+        demand_coefficients,
     )
 
     # write dataframes to files
@@ -153,7 +173,7 @@ def run_simulation(
         )
 
         # allow airlines to adjust their fares and reassign aircraft to different routes
-        airline_routes, city_pair_data = airline.optimise_fares(
+        airline_routes, city_pair_data = al.optimise_fares(
             airlines,
             airline_routes,
             airline_fleets,
@@ -162,8 +182,9 @@ def run_simulation(
             aircraft_data,
             max_fare,
             FuelCost_USDperGallon,
+            demand_coefficients,
         )
-        airline_routes, airline_fleets, city_pair_data, city_data = airline.reassign_ac_for_profit(
+        airline_routes, airline_fleets, city_pair_data, city_data = al.reassign_ac_for_profit(
             airlines,
             airline_routes,
             airline_fleets,
@@ -174,6 +195,16 @@ def run_simulation(
             demand_coefficients,
             FuelCost_USDperGallon,
             year,
+        )
+
+        # update airline itinerary times
+        airline_routes = al.update_itinerary_times(
+            airlines,
+            airline_routes,
+            city_data,
+            city_pair_data,
+            aircraft_data,
+            airline_fleets,
         )
 
         # write dataframes to files
