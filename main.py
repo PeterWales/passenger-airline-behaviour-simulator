@@ -236,6 +236,7 @@ def main():
             income_data,
             fuel_data,
             save_folder_path,
+            cache_folder_path,
             run_parameters,
         )
 

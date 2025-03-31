@@ -3,6 +3,7 @@ import airline as al
 import aircraft
 import city
 import os
+import pickle
 
 
 def simulate_base_year(
@@ -15,6 +16,7 @@ def simulate_base_year(
     aircraft_data: pd.DataFrame,
     FuelCost_USDperGallon: float,
     save_folder_path: str,
+    cache_folder_path: str,
     max_fare: float,
     iteration_limit: int,
     demand_coefficients: dict[str, float],
@@ -80,8 +82,10 @@ def simulate_base_year(
                 break
     
     # save pkl files
-    airline_routes.to_pickle(os.path.join(save_folder_path, "airline_routes.pkl"))
-    city_pair_data.to_pickle(os.path.join(save_folder_path, "city_pair_data.pkl"))
+    with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
+                pickle.dump(airline_routes, f)
+    with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
+        pickle.dump(city_pair_data, f)
     return airline_routes, city_pair_data
 
 
@@ -99,6 +103,7 @@ def run_simulation(
     income_data: pd.DataFrame,
     fuel_data: pd.DataFrame,
     save_folder_path: str,
+    cache_folder_path: str,
     run_parameters: dict,
 ):
     base_year = run_parameters["StartYear"]
@@ -142,6 +147,7 @@ def run_simulation(
             aircraft_data,
             FuelCost_USDperGallon,
             save_folder_path,
+            cache_folder_path,
             max_fare,
             iteration_limit,
             demand_coefficients,
