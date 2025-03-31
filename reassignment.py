@@ -860,6 +860,22 @@ def reassign_ac_to_new_route(
             }
             new_itin_out = pd.Series(new_itin_out)
             new_itin_in = pd.Series(new_itin_in)
+
+            new_itin_time_out = acft.calc_itin_time(
+                new_itin_out,
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+            new_itin_time_in = acft.calc_itin_time(
+                new_itin_in,
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+
             new_itin_out_exp_utility = demand.calc_exp_utility(
                 demand_coefficients,
                 new_itin_out["fare"],
@@ -876,6 +892,7 @@ def reassign_ac_to_new_route(
             )
             new_itin_out["exp_utility"] = new_itin_out_exp_utility
             new_itin_in["exp_utility"] = new_itin_in_exp_utility
+            
             airline_routes[airline_id] = pd.concat(
                 [
                     airline_routes[airline_id],
