@@ -1223,7 +1223,7 @@ def reassign_ac_for_profit(
                     ground_aircraft_ids = airlines.loc[airline_id, "Grounded_acft"]
                     ground_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(ground_aircraft_ids)]
                     ground_ac.sort_values(["SizeClass", "Age_years"], ascending=[True, True], inplace=True)
-                    reassign_ac = itin_ac.iloc[0]  # smallest aircraft only
+                    reassign_ac = ground_ac.iloc[0]  # smallest aircraft only
 
                     reassign_new_profit_per_seat = 0.0
                     reassign_old_profit_per_seat = 0.0
