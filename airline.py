@@ -1063,6 +1063,9 @@ def reassign_ac_for_profit(
                             (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"])
                         ].index
                     )
+                
+                # reorder rtn_flt_df
+                rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
 
             else:
                 # if no beneficial change can be made, finished = True
@@ -1178,6 +1181,25 @@ def reassign_ac_for_profit(
                     FuelCost_USDperGallon,
                     demand_coefficients,
                 )
+
+                # if no planes left, remove itinerary from airline_routes and rtn_flt_df
+                if len(airline_routes[airline_id].loc[out_reassign_mask, "aircraft_ids"].iloc[0]) == 0:
+                    # remove itinerary from airline_routes
+                    airline_routes[airline_id] = airline_routes[airline_id].loc[~out_reassign_mask]
+                    in_reassign_mask = (
+                        (airline_routes[airline_id]["origin"] == reassign_itin_in["origin"])
+                        & (airline_routes[airline_id]["destination"] == reassign_itin_in["destination"])
+                        & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_in["fuel_stop"])
+                    )  # recalculate mask since outbound itinerary has been removed
+                    airline_routes[airline_id] = airline_routes[airline_id].loc[~in_reassign_mask]
+                    # remove itinerary from rtn_flt_df
+                    rtn_flt_df = rtn_flt_df.drop(
+                        rtn_flt_df[
+                            (rtn_flt_df["Origin"] == reassign_itin_out["origin"]) &
+                            (rtn_flt_df["Destination"] == reassign_itin_out["destination"]) &
+                            (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"])
+                        ].index
+                    )
 
                 # reorder rtn_flt_df
                 rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
