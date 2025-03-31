@@ -920,6 +920,10 @@ def reassign_ac_for_profit(
         # reassign aircraft one-by-one to most profitable route and stop when no more profitable routes are available
         finished = False
         while not finished:
+            if len(rtn_flt_df) == 0:
+                finished = True
+                break
+            
             reassign_row = rtn_flt_df.loc[rtn_flt_df["Profit_perSeat"].idxmin()]  # least profitable itinerary
             reassign_itin_out = airline_routes[airline_id].loc[
                 (airline_routes[airline_id]["origin"] == reassign_row["Origin"])
@@ -1074,7 +1078,10 @@ def reassign_ac_for_profit(
         # deal with grounding and leases where appropriate
         rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
         # check whether any itineraries are making a loss
-        if rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0:
+        if (
+            len(rtn_flt_df) > 0
+            and rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0
+        ):
             # end lease on all currently grounded aircraft
             for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
                 # remove aircraft from airline["n_Aircraft"]
