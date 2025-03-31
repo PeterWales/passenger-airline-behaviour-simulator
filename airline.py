@@ -675,6 +675,7 @@ def optimise_fares(
     city_pair_data : pd.DataFrame
     """
     for _, airline in airlines.iterrows():
+        print(f"        Optimising fares for airline {airline['Airline_ID']}...")
         for idx, itin in airline_routes[airline["Airline_ID"]].iterrows():
             city_pair = city_pair_data[
                 (city_pair_data["OriginCityID"] == itin["origin"])
@@ -1047,8 +1048,13 @@ def reassign_ac_for_profit(
                 # if no planes left, remove itinerary from airline_routes and rtn_flt_df
                 if len(airline_routes[airline_id].loc[out_reassign_mask, "aircraft_ids"].iloc[0]) == 0:
                     # remove itinerary from airline_routes
-                    airline_routes[airline_id] = airline_routes[airline_id][~out_reassign_mask]
-                    airline_routes[airline_id] = airline_routes[airline_id][~in_reassign_mask]
+                    airline_routes[airline_id] = airline_routes[airline_id].loc[~out_reassign_mask]
+                    in_reassign_mask = (
+                        (airline_routes[airline_id]["origin"] == reassign_itin_in["origin"])
+                        & (airline_routes[airline_id]["destination"] == reassign_itin_in["destination"])
+                        & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_in["fuel_stop"])
+                    )  # recalculate mask since outbound itinerary has been removed
+                    airline_routes[airline_id] = airline_routes[airline_id].loc[~in_reassign_mask]
                     # remove itinerary from rtn_flt_df
                     rtn_flt_df = rtn_flt_df.drop(
                         rtn_flt_df[
@@ -1363,6 +1369,11 @@ def update_itinerary_times(
     for _, airline in airlines.iterrows():
         airline_id = airline["Airline_ID"]
         for idx, itin in airline_routes[airline_id].iterrows():
+            # remove itinerary if no aircraft assigned and warn because this should have been dealt with elsewhere
+            if itin["aircraft_ids"] == []:
+                airline_routes[airline_id].drop(idx, inplace=True)
+                print(f"        Warning: itinerary removed between years due to having no aircraft assigned.")
+                continue
             airline_routes[airline_id].loc[idx, "itin_time_hrs"] = acft.calc_itin_time(
                 airline_routes[airline_id].loc[idx],
                 city_data,
