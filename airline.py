@@ -901,7 +901,7 @@ def reassign_ac_for_profit(
 
     # iterate over all airlines
     for _, airline in airlines.iterrows():
-        print(f"    Reassigning aircraft for airline {airline['Airline_ID']}")
+        print(f"        Reassigning aircraft for airline {airline['Airline_ID']}")
 
         airline_id = airline["Airline_ID"]
 
@@ -934,7 +934,7 @@ def reassign_ac_for_profit(
 
             # choose largest aircraft on route to reassign
             itin_aircraft_ids = reassign_row["Aircraft_IDs"]
-            itin_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(itin_aircraft_ids)]
+            itin_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(itin_aircraft_ids)].copy()
             itin_ac.sort_values(["SizeClass", "Age_years"], ascending=[False, False], inplace=True)
             reassign_ac = itin_ac.iloc[0]  # largest aircraft only
 
@@ -1014,6 +1014,17 @@ def reassign_ac_for_profit(
                     op_hrs_per_year,
                 )
 
+                # update masks because an itinerary may have been added to airline_routes
+                out_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_out["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_out["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_out["fuel_stop"])
+                )
+                in_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_in["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_in["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_in["fuel_stop"])
+                )
                 # update rtn_flt_df
                 rtn_flt_df = reassignment.update_profit_tracker(
                     rtn_flt_df,
@@ -1067,7 +1078,7 @@ def reassign_ac_for_profit(
                 airline_fleets[airline_id] = airline_fleets[airline_id][
                     airline_fleets[airline_id]["AircraftID"] != ac_idx
                 ]
-            airlines.loc[airline_id, "Grounded_acft"] = []
+            airlines.at[airline_id, "Grounded_acft"] = []
 
             # ground aircraft that are making a loss
             while rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0:
@@ -1086,7 +1097,7 @@ def reassign_ac_for_profit(
 
                 # choose largest aircraft on route to ground
                 itin_aircraft_ids = reassign_row["Aircraft_IDs"]
-                itin_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(itin_aircraft_ids)]
+                itin_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(itin_aircraft_ids)].copy()
                 itin_ac.sort_values(["SizeClass", "Age_years"], ascending=[False, False], inplace=True)
                 reassign_ac = itin_ac.iloc[0]  # largest aircraft only
 
@@ -1132,6 +1143,17 @@ def reassign_ac_for_profit(
                     op_hrs_per_year,
                 )
 
+                # update masks because an itinerary may have been removed from airline_routes
+                out_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_out["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_out["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_out["fuel_stop"])
+                )
+                in_reassign_mask = (
+                    (airline_routes[airline_id]["origin"] == reassign_itin_in["origin"])
+                    & (airline_routes[airline_id]["destination"] == reassign_itin_in["destination"])
+                    & (airline_routes[airline_id]["fuel_stop"] == reassign_itin_in["fuel_stop"])
+                )
                 # update rtn_flt_df
                 rtn_flt_df = reassignment.update_profit_tracker(
                     rtn_flt_df,
@@ -1237,7 +1259,7 @@ def reassign_ac_for_profit(
                         airline_fleets[airline_id] = airline_fleets[airline_id][
                             airline_fleets[airline_id]["AircraftID"] != ac_idx
                         ]
-                    airlines.loc[airline_id, "Grounded_acft"] = []
+                    airlines.at[airline_id, "Grounded_acft"] = []
                 else:
                     # allow airline to lease new aircraft, starting with longest range aircraft type first
                     aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)

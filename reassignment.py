@@ -394,8 +394,8 @@ def best_itin_alternative(
                         for ac_id in itineraries.loc[out_itin_mask, "aircraft_ids"].iloc[0]:
                             itin_seats += aircraft_data.loc[fleet_data.loc[ac_id, "SizeClass"], "Seats"]
 
-                        test_itin_out = itineraries.loc[out_itin_mask]
-                        test_itin_in = itineraries.loc[in_itin_mask]
+                        test_itin_out = copy.deepcopy(itineraries.loc[out_itin_mask])
+                        test_itin_in = copy.deepcopy(itineraries.loc[in_itin_mask])
 
                         new_itin_old_profit_per_seat = (
                             al.itin_profit(
@@ -422,36 +422,37 @@ def best_itin_alternative(
                         ) / itin_seats
 
                         # calculate new profit per seat after new aircraft assigned
-                        test_itin_out["flights_per_year"].iloc[0] += flights_per_year
-                        test_itin_out["seat_flights_per_year"].iloc[0] += seat_flights_per_year
-                        test_itin_out["aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
+                        test_itin_out.at[test_itin_out.index[0], "flights_per_year"] += flights_per_year
+                        test_itin_out.at[test_itin_out.index[0], "seat_flights_per_year"] += seat_flights_per_year
+                        test_itin_out.at[test_itin_out.index[0], "aircraft_ids"].append(int(reassign_ac["AircraftID"]))
                         itin_time_out = acft.calc_itin_time(
-                            test_itin_out,
+                            test_itin_out.iloc[0],
                             city_data,
                             city_pair_data,
                             aircraft_data,
                             fleet_data,
                         )
                         out_old_exp_utility = test_itin_out["exp_utility"].iloc[0]
-                        test_itin_out["exp_utility"].iloc[0] = demand.calc_exp_utility(
+                        test_itin_out.at[test_itin_out.index[0], "exp_utility"] = demand.calc_exp_utility(
                             demand_coefficients,
                             test_itin_out["fare"].iloc[0],
                             itin_time_out,
                             test_itin_out["flights_per_year"].iloc[0],
                             -1
                         )
-                        test_itin_in["flights_per_year"].iloc[0] += flights_per_year
-                        test_itin_in["seat_flights_per_year"].iloc[0] += seat_flights_per_year
-                        test_itin_in["aircraft_ids"].iloc[0].append(int(reassign_ac["AircraftID"]))
+
+                        test_itin_in.at[test_itin_in.index[0], "flights_per_year"] += flights_per_year
+                        test_itin_in.at[test_itin_in.index[0], "seat_flights_per_year"] += seat_flights_per_year
+                        test_itin_in.at[test_itin_in.index[0], "aircraft_ids"].append(int(reassign_ac["AircraftID"]))
                         itin_time_in = acft.calc_itin_time(
-                            test_itin_in,
+                            test_itin_in.iloc[0],
                             city_data,
                             city_pair_data,
                             aircraft_data,
                             fleet_data,
                         )
                         in_old_exp_utility = test_itin_in["exp_utility"].iloc[0]
-                        test_itin_in["exp_utility"].iloc[0] = demand.calc_exp_utility(
+                        test_itin_in.at[test_itin_in.index[0], "exp_utility"] = demand.calc_exp_utility(
                             demand_coefficients,
                             test_itin_in["fare"].iloc[0],
                             itin_time_in,
@@ -497,14 +498,14 @@ def best_itin_alternative(
                         ) / itin_seats
 
                         # reset test_itin_out and test_itin_in to avoid mutability issues
-                        test_itin_out["flights_per_year"].iloc[0] -= flights_per_year
-                        test_itin_out["seat_flights_per_year"].iloc[0] -= seat_flights_per_year
-                        test_itin_out["aircraft_ids"].iloc[0].remove(reassign_ac["AircraftID"])
-                        test_itin_out["exp_utility"].iloc[0] = out_old_exp_utility
-                        test_itin_in["flights_per_year"].iloc[0] -= flights_per_year
-                        test_itin_in["seat_flights_per_year"].iloc[0] -= seat_flights_per_year
-                        test_itin_in["aircraft_ids"].iloc[0].remove(reassign_ac["AircraftID"])
-                        test_itin_in["exp_utility"].iloc[0] = in_old_exp_utility
+                        test_itin_out.at[test_itin_out.index[0], "flights_per_year"] -= flights_per_year
+                        test_itin_out.at[test_itin_out.index[0], "seat_flights_per_year"] -= seat_flights_per_year
+                        test_itin_out.at[test_itin_out.index[0], "aircraft_ids"].remove(reassign_ac["AircraftID"])
+                        test_itin_out.at[test_itin_out.index[0], "exp_utility"] = out_old_exp_utility
+                        test_itin_in.at[test_itin_in.index[0], "flights_per_year"] -= flights_per_year
+                        test_itin_in.at[test_itin_in.index[0], "seat_flights_per_year"] -= seat_flights_per_year
+                        test_itin_in.at[test_itin_in.index[0], "aircraft_ids"].remove(reassign_ac["AircraftID"])
+                        test_itin_in.at[test_itin_in.index[0], "exp_utility"] = in_old_exp_utility
                     else:
                         # airline doesn't already fly this route
                         new_itin_old_profit_per_seat = 0.0
@@ -666,6 +667,7 @@ def reassign_ac_to_new_route(
     """
     if new_origin == -1:
         grounding = True  # aircraft is being moved from an itinerary to storage
+        deploying = False
     else:
         grounding = False
         if out_reassign_mask is None:
@@ -739,34 +741,39 @@ def reassign_ac_to_new_route(
         airline_routes[airline_id].loc[in_reassign_mask, "flights_per_year"] -= reassign_ac["Flights_perYear"]
         airline_routes[airline_id].loc[out_reassign_mask, "seat_flights_per_year"] -= reassign_ac["Flights_perYear"] * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
         airline_routes[airline_id].loc[in_reassign_mask, "seat_flights_per_year"] -= reassign_ac["Flights_perYear"] * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
-        reassign_itin_time_out = acft.calc_itin_time(
-            airline_routes[airline_id].loc[out_reassign_mask].iloc[0],
-            city_data,
-            city_pair_data,
-            aircraft_data,
-            airline_fleets[airline_id],
-        )
-        reassign_itin_time_in = acft.calc_itin_time(
-            airline_routes[airline_id].loc[in_reassign_mask].iloc[0],
-            city_data,
-            city_pair_data,
-            aircraft_data,
-            airline_fleets[airline_id],
-        )
-        airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"] = demand.calc_exp_utility(
-            demand_coefficients,
-            airline_routes[airline_id].loc[out_reassign_mask, "fare"].iloc[0],
-            reassign_itin_time_out,
-            airline_routes[airline_id].loc[out_reassign_mask, "flights_per_year"].iloc[0],  # already been adjusted
-            -1
-        )
-        airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"] = demand.calc_exp_utility(
-            demand_coefficients,
-            airline_routes[airline_id].loc[in_reassign_mask, "fare"].iloc[0],
-            reassign_itin_time_in,
-            airline_routes[airline_id].loc[in_reassign_mask, "flights_per_year"].iloc[0],  # already been adjusted
-            -1
-        )
+        # check whether there are still any aircraft assigned to this itinerary
+        if len(airline_routes[airline_id].loc[out_reassign_mask, "aircraft_ids"].iloc[0]) > 0:
+            reassign_itin_time_out = acft.calc_itin_time(
+                airline_routes[airline_id].loc[out_reassign_mask].iloc[0],
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+            reassign_itin_time_in = acft.calc_itin_time(
+                airline_routes[airline_id].loc[in_reassign_mask].iloc[0],
+                city_data,
+                city_pair_data,
+                aircraft_data,
+                airline_fleets[airline_id],
+            )
+            airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"] = demand.calc_exp_utility(
+                demand_coefficients,
+                airline_routes[airline_id].loc[out_reassign_mask, "fare"].iloc[0],
+                reassign_itin_time_out,
+                airline_routes[airline_id].loc[out_reassign_mask, "flights_per_year"].iloc[0],  # already been adjusted
+                -1
+            )
+            airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"] = demand.calc_exp_utility(
+                demand_coefficients,
+                airline_routes[airline_id].loc[in_reassign_mask, "fare"].iloc[0],
+                reassign_itin_time_in,
+                airline_routes[airline_id].loc[in_reassign_mask, "flights_per_year"].iloc[0],  # already been adjusted
+                -1
+            )
+        else:
+            airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"] = 0.0
+            airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"] = 0.0
         # calculate exp(utility) deltas for city_pair_data
         reassign_delta_exp_utility_out = airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"].iloc[0] - reassign_old_utility_out
         reassign_delta_exp_utility_in = airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"].iloc[0] - reassign_old_utility_in
@@ -906,6 +913,9 @@ def reassign_ac_to_new_route(
             # calculate exp(utility) deltas for city_pair_data (previous utility was zero)
             itin_delta_exp_utility_out = new_itin_out_exp_utility
             itin_delta_exp_utility_in = new_itin_in_exp_utility
+    else:
+        # add aircraft to grounded_acft
+        airlines.loc[airline_id, "Grounded_acft"].append(reassign_ac["AircraftID"])
 
     if not deploying:
         # adjust city_data movements
@@ -1017,11 +1027,11 @@ def update_profit_tracker(
         ].empty:
             # add itinerary to rtn_flt_df
             new_itin_dict = {
-                "Origin": new_origin,
-                "Destination": new_destination,
-                "Fuel_Stop": -1,
-                "Profit_perSeat": 0,  # recalculated later
-                "Aircraft_IDs": [reassign_ac["AircraftID"]]
+                "Origin": [new_origin],
+                "Destination": [new_destination],
+                "Fuel_Stop": [-1],
+                "Profit_perSeat": [0],  # recalculated later
+                "Aircraft_IDs": [[reassign_ac["AircraftID"]]]
             }
             new_itin_df = pd.DataFrame(new_itin_dict)
             rtn_flt_df = pd.concat([rtn_flt_df, new_itin_df], ignore_index=True)
