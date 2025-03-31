@@ -202,7 +202,7 @@ def initialise_fleet_assignment(
         possible_RPKs = 0.0
         distances = []
         for origin_id in city_lookup[airline["CountryID"]]:
-            for destination_id in range(n_cities):
+            for destination_id in city_data.index.to_list():
                 # check outbound and inbound routes exist in city_pair_data
                 if (not city_pair_data[
                     (city_pair_data["OriginCityID"] == origin_id)
@@ -703,12 +703,12 @@ def optimise_fares(
                 + (itin_fare_diff * itin["seat_flights_per_year"])
             ) / city_pair["Seat_Flights_perYear"]
 
+    # update city_pair_data mean fare
+    city_pair_data["Mean_Fare_USD"] = city_pair_data["New_Mean_Fare_USD"].copy()
+
     # update demand for all O-D pairs
     for idx, city_pair in city_pair_data.iterrows():
         city_pair_data.loc[idx, "Total_Demand"] = demand.update_od_demand(city_pair)
-    
-    # update city_pair_data mean fare
-    city_pair_data["Mean_Fare_USD"] = city_pair_data["New_Mean_Fare_USD"]
 
     return airline_routes, city_pair_data
 

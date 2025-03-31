@@ -122,7 +122,7 @@ def run_simulation(
     )
 
     # initialise city_pair_data["New_Mean_Fare_USD"]
-    city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"]
+    city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"].copy()
 
     airline_routes, city_pair_data = simulate_base_year(
         base_year,

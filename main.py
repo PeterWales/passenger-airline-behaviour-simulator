@@ -24,7 +24,7 @@ def main():
         randomGen = random.Random(x=0)
 
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
-        save_folder_path = os.path.join(file_path, "output")
+        save_folder_path = os.path.join(file_path, f"output_{run_parameters['RunID']}")
         if not os.path.exists(save_folder_path):
             os.makedirs(save_folder_path)
 
