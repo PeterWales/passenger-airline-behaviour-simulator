@@ -368,6 +368,10 @@ def best_itin_alternative(
                     seat_flights_per_year = flights_per_year * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
 
                     # check whether airline already flies this route
+                    city_pair_in = city_pair_data[
+                        (city_pair_data["OriginCityID"] == destination_id)
+                        & (city_pair_data["DestinationCityID"] == origin_id)
+                    ].iloc[0]
                     if not itineraries[
                         (itineraries["origin"] == origin_id)
                         & (itineraries["destination"] == destination_id)
@@ -384,10 +388,6 @@ def best_itin_alternative(
                             & (itineraries["destination"] == origin_id)
                             & (itineraries["fuel_stop"] == -1)
                         )
-                        city_pair_in = city_pair_data[
-                            (city_pair_data["OriginCityID"] == city_pair["DestinationCityID"])
-                            & (city_pair_data["DestinationCityID"] == city_pair["OriginCityID"])
-                        ].iloc[0]
 
                         # calculate sum of all seats that the airline has already assigned to this itinerary
                         itin_seats = 0
