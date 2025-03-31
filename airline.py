@@ -4,9 +4,12 @@ import route
 import aircraft as acft
 import demand
 import reassignment
-from scipy.optimize import minimize_scalar
+from skopt import gp_minimize
 import os
 import copy
+import warnings
+
+warnings.filterwarnings("ignore", message="The objective has been evaluated at point*", category=UserWarning)
 
 
 def initialise_airlines(
@@ -733,33 +736,12 @@ def maximise_itin_profit(
         & (city_pair_data["DestinationCityID"] == airline_route["destination"])
     ].iloc[0]
 
-    # get a ballpark figure for best fare
-    fare_range = range(0, max_fare, 20)
-    profit_range = []
-    for fare in fare_range:
-        profit_range.append(
-            itin_profit(
-                fare,
-                airline_route,
-                city_pair,
-                origin,
-                destination,
-                fleet_df,
-                aircraft_data,
-                FuelCost_USDperGallon,
-                demand_coefficients,
-            )
-        )
-    # find index of best test
-    best_fare_idx = np.argmax(profit_range)
-    opt_min_fare = max(fare_range[best_fare_idx] - 100, 0)
-    opt_max_fare = min(fare_range[best_fare_idx] + 100, max_fare)
-    fare_bounds = (opt_min_fare, opt_max_fare)
+    fare_bounds = (1.0, max_fare)
 
     # Minimise negative profit
     def objective(fare):
         return -itin_profit(
-            fare,
+            fare[0],
             airline_route,
             city_pair,
             origin,
@@ -769,9 +751,19 @@ def maximise_itin_profit(
             FuelCost_USDperGallon,
             demand_coefficients,
         )
+    
+    initial_fare = max([min(city_pair["Mean_Fare_USD"], max_fare),0.0])
 
-    result = minimize_scalar(objective, bounds=fare_bounds, method="bounded")
-    optimal_fare = result.x
+    result = gp_minimize(
+        objective,
+        [fare_bounds],
+        n_calls=20,
+        n_initial_points=5,
+        x0=[[initial_fare]],
+        y0=[objective([initial_fare])],
+        n_jobs=1,  # force single thread because dataframes are modified in-place
+    )
+    optimal_fare = float(result.x[0])
     return optimal_fare
 
 
