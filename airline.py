@@ -1097,7 +1097,10 @@ def reassign_ac_for_profit(
             airlines.at[airline_id, "Grounded_acft"] = []
 
             # ground aircraft that are making a loss
-            while rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0:
+            while (
+                len(rtn_flt_df) > 0
+                and rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0
+            ):
                 reassign_row = rtn_flt_df.iloc[0]  # least profitable itinerary
                 reassign_itin_out = airline_routes[airline_id].loc[
                     (airline_routes[airline_id]["origin"] == reassign_row["Origin"])
