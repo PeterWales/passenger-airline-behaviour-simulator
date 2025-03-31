@@ -78,6 +78,10 @@ def simulate_base_year(
             if max_diff < demand_tolerance:
                 print(f"        Converged after {iteration} iterations")
                 break
+    
+    # save pkl files
+    airline_routes.to_pickle(os.path.join(save_folder_path, "airline_routes.pkl"))
+    city_pair_data.to_pickle(os.path.join(save_folder_path, "city_pair_data.pkl"))
     return airline_routes, city_pair_data
 
 
@@ -124,20 +128,24 @@ def run_simulation(
     # initialise city_pair_data["New_Mean_Fare_USD"]
     city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"].copy()
 
-    airline_routes, city_pair_data = simulate_base_year(
-        base_year,
-        city_data,
-        city_pair_data,
-        airlines,
-        airline_fleets,
-        airline_routes,
-        aircraft_data,
-        FuelCost_USDperGallon,
-        save_folder_path,
-        max_fare,
-        iteration_limit,
-        demand_coefficients,
-    )
+    if (
+        run_parameters["RerunFareInit"] == "y"
+        or run_parameters["RerunFareInit"] == "Y"
+    ):
+        airline_routes, city_pair_data = simulate_base_year(
+            base_year,
+            city_data,
+            city_pair_data,
+            airlines,
+            airline_fleets,
+            airline_routes,
+            aircraft_data,
+            FuelCost_USDperGallon,
+            save_folder_path,
+            max_fare,
+            iteration_limit,
+            demand_coefficients,
+        )
 
     # write dataframes to files
     city_data.to_csv(os.path.join(save_folder_path, f"city_data_{base_year}.csv"), index=True)

@@ -163,6 +163,7 @@ def main():
             or not city_pair_data_cache
             or not city_data_cache
         ):
+            run_parameters["RerunFareInit"] = "y"
             print("    Initialising fleet assignment...")
             (
                 airline_fleets,
