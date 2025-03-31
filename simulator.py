@@ -2,6 +2,7 @@ import pandas as pd
 import airline as al
 import aircraft
 import city
+import route
 import os
 import pickle
 
@@ -96,6 +97,7 @@ def run_simulation(
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
     city_lookup: list[list[int]],
+    country_data,
     aircraft_data: pd.DataFrame,
     demand_coefficients: dict[str, float],
     population_elasticity: float,
@@ -174,13 +176,14 @@ def run_simulation(
             year,
         )
         city_data = city.annual_update(
+            country_data,
             city_data,
             city_lookup,
             population_data,
             income_data,
             year,
         )
-        city_pair_data = city.annual_update(
+        city_pair_data = route.annual_update(
             city_pair_data,
             city_data,
             population_elasticity,

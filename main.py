@@ -229,6 +229,7 @@ def main():
             city_data,
             city_pair_data,
             city_lookup,
+            country_data,
             aircraft_data,
             demand_coefficients,
             run_parameters["PopulationElasticity"],

@@ -1,5 +1,6 @@
 import pandas as pd
 from operator import add
+import math
 import numpy as np
 import airline as al
 import demand as demand
@@ -735,20 +736,22 @@ def enforce_capacity(
 
 
 def annual_update(
+    country_data: pd.DataFrame,
     city_data: pd.DataFrame,
     city_lookup: list,
     population_data: pd.DataFrame,
     income_data: pd.DataFrame,
     year_entering: int,
 ):
-    for _, country_pop in population_data.iterrows():
-        pop_multiplier = country_pop[str(year_entering)] / country_pop[str(year_entering-1)]
-        for city_id in city_lookup[country_pop["Number"]]:
-            city_data.loc[city_id, "Population"] *= pop_multiplier
-    
-    for _, country_inc in income_data.iterrows():
-        inc_multiplier = country_inc[str(year_entering)] / country_inc[str(year_entering-1)]
-        for city_id in city_lookup[country_inc["Number"]]:
+    for _, country in country_data.iterrows():
+        country_pop = population_data[population_data["Number"] == country["Number"]]
+        country_inc = income_data[income_data["Number"] == country["Number"]]
+
+        pop_multiplier = country_pop[str(year_entering)].iloc[0] / country_pop[str(year_entering-1)].iloc[0]
+        inc_multiplier = country_inc[str(year_entering)].iloc[0] / country_inc[str(year_entering-1)].iloc[0]
+
+        for city_id in city_lookup[country["Number"]]:
+            city_data.loc[city_id, "Population"] = math.floor(city_data.loc[city_id, "Population"] * pop_multiplier)
             city_data.loc[city_id, "Income_USDpercap"] *= inc_multiplier
 
     return city_data
