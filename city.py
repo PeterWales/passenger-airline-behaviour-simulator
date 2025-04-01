@@ -315,9 +315,7 @@ def enforce_capacity(
         reassign_flights_per_year = []
         reassign_fuel_stop = []
 
-        for _, airline in airlines.iterrows():
-            airline_id = airline["Airline_ID"]
-
+        for airline_id, airline in airlines.iterrows():
             # find all routes that depart from or stop for fuel at city and are operated by airline (return flight then determined from outbound)
             city_airline_routes = airline_routes[airline_id][
                 (airline_routes[airline_id]["origin"] == city_id)

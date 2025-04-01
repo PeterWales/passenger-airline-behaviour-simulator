@@ -415,9 +415,7 @@ def annual_update(
     year_entering: int,
 ) -> list[pd.DataFrame]:
     # TODO: when new ac added, check whether efficiency improvement negates the need for a fuel stop and update route appropriately
-    for _, airline in airlines.iterrows():
-        airline_id = airline["Airline_ID"]
-
+    for airline_id, airline in airlines.iterrows():
         for _, ac in airline_fleets[airline_id].iterrows():
             ac_type = aircraft_data.loc[ac["SizeClass"]]
             if ac["Age_years"] == ac_type["RetirementAge_years"]:
