@@ -359,7 +359,9 @@ def best_itin_alternative(
                     and city_data.loc[destination_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
                 ):
                     # new itinerary is possible
-                    old_ac_flights_per_year = fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"]
+                    old_ac_flights_per_year = fleet_data.loc[
+                        fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"
+                    ].values[0]
 
                     seat_flights_per_year = flights_per_year * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
 
