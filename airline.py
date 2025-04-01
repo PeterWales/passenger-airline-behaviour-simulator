@@ -674,7 +674,7 @@ def optimise_fares(
     city_pair_data : pd.DataFrame
     """
     for airline_id, airline in airlines.iterrows():
-        print(f"        Optimising fares for airline {airline['Airline_ID']}...")
+        print(f"        Optimising fares for airline {airline_id}...")
         for idx, itin in airline_routes[airline_id].iterrows():
             city_pair = city_pair_data[
                 (city_pair_data["OriginCityID"] == itin["origin"])
