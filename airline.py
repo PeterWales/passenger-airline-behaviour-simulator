@@ -1220,7 +1220,7 @@ def reassign_ac_for_profit(
             ):
                 # try to assign the smallest grounded aircraft to a profitable route
                 ground_aircraft_ids = airlines.loc[airline_id, "Grounded_acft"]
-                ground_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(ground_aircraft_ids)]
+                ground_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(ground_aircraft_ids)].copy()
                 ground_ac.sort_values(["SizeClass", "Age_years"], ascending=[True, True], inplace=True)
                 reassign_ac = ground_ac.iloc[0]  # smallest aircraft only
 
