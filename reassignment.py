@@ -354,7 +354,8 @@ def best_itin_alternative(
                     -1
                 )
                 if (
-                    city_data.loc[origin_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
+                    flights_per_year > 0
+                    and city_data.loc[origin_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
                     and city_data.loc[destination_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
                 ):
                     # new itinerary is possible
