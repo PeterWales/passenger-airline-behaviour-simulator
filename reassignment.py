@@ -358,16 +358,8 @@ def best_itin_alternative(
                     and city_data.loc[destination_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
                 ):
                     # new itinerary is possible
-                    flights_per_year = acft.calc_flights_per_year(
-                        city_data.loc[origin_id],
-                        origin_id,
-                        city_data.loc[destination_id],
-                        destination_id,
-                        aircraft_data.loc[reassign_ac["SizeClass"]],
-                        city_pair_data,
-                        None,
-                        -1
-                    )
+                    old_ac_flights_per_year = fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"]
+
                     seat_flights_per_year = flights_per_year * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
 
                     # check whether airline already flies this route
@@ -425,6 +417,7 @@ def best_itin_alternative(
                         ) / itin_seats
 
                         # calculate new profit per seat after new aircraft assigned
+                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
                         test_itin_out.at[test_itin_out.index[0], "flights_per_year"] += flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "seat_flights_per_year"] += seat_flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "aircraft_ids"].append(int(reassign_ac["AircraftID"]))
@@ -500,7 +493,7 @@ def best_itin_alternative(
                             )
                         ) / itin_seats
 
-                        # reset test_itin_out and test_itin_in to avoid mutability issues
+                        # reset test_itin_out, test_itin_in and fleet_data to avoid mutability issues
                         test_itin_out.at[test_itin_out.index[0], "flights_per_year"] -= flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "seat_flights_per_year"] -= seat_flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "aircraft_ids"].remove(reassign_ac["AircraftID"])
@@ -509,9 +502,11 @@ def best_itin_alternative(
                         test_itin_in.at[test_itin_in.index[0], "seat_flights_per_year"] -= seat_flights_per_year
                         test_itin_in.at[test_itin_in.index[0], "aircraft_ids"].remove(reassign_ac["AircraftID"])
                         test_itin_in.at[test_itin_in.index[0], "exp_utility"] = in_old_exp_utility
+                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
                     else:
                         # airline doesn't already fly this route
                         new_itin_old_profit_per_seat = 0.0
+                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
                         test_itin_out = {
                             "origin": origin_id,
                             "destination": destination_id,
@@ -580,6 +575,9 @@ def best_itin_alternative(
                                 add_city_pair_exp_utility=test_itin_in_exp_utility
                             )
                         ) / aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]  # seats on this itinerary are only provided by reassigned aircraft
+
+                        # reset fleet_data to avoid mutability issues
+                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
 
                     # calculate change in profit per seat
                     test_delta_profit_per_seat = (
