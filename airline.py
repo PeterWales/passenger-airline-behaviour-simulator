@@ -1328,7 +1328,7 @@ def reassign_ac_for_profit(
                             city_data,
                             city_pair_data,
                             city_lookup,
-                            airlines["CountryID"],
+                            airline["CountryID"],
                             airline_routes[airline_id],
                             airline_fleets[airline_id],
                             aircraft_data,
