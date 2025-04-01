@@ -1214,178 +1214,177 @@ def reassign_ac_for_profit(
                 # reorder rtn_flt_df
                 rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
         else:
-            # airline has no loss-making aircraft
-            if len(airlines.loc[airline_id, "Grounded_acft"]) > 0:
-                # allow airline to reassign previously grounded aircraft
-                finished = False
-                while not finished:
-                    # try to assign the smallest grounded aircraft to a profitable route
-                    ground_aircraft_ids = airlines.loc[airline_id, "Grounded_acft"]
-                    ground_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(ground_aircraft_ids)]
-                    ground_ac.sort_values(["SizeClass", "Age_years"], ascending=[True, True], inplace=True)
-                    reassign_ac = ground_ac.iloc[0]  # smallest aircraft only
+            # airline has no loss-making aircraft, so allow airline to reassign previously grounded aircraft
+            while (
+                len(airlines.loc[airline_id, "Grounded_acft"]) > 0
+            ):
+                # try to assign the smallest grounded aircraft to a profitable route
+                ground_aircraft_ids = airlines.loc[airline_id, "Grounded_acft"]
+                ground_ac = airline_fleets[airline_id][airline_fleets[airline_id]["AircraftID"].isin(ground_aircraft_ids)]
+                ground_ac.sort_values(["SizeClass", "Age_years"], ascending=[True, True], inplace=True)
+                reassign_ac = ground_ac.iloc[0]  # smallest aircraft only
 
-                    reassign_new_profit_per_seat = 0.0
-                    reassign_old_profit_per_seat = 0.0
+                reassign_new_profit_per_seat = 0.0
+                reassign_old_profit_per_seat = 0.0
+                (
+                    delta_profit_per_seat,
+                    new_origin, new_destination,
+                    addnl_flights_per_year,
+                    addnl_seat_flights_per_year,
+                ) = reassignment.best_itin_alternative(
+                    city_data,
+                    city_pair_data,
+                    city_lookup,
+                    airlines.loc[airline_id, "CountryID"],
+                    airline_routes[airline_id],
+                    airline_fleets[airline_id],
+                    aircraft_data,
+                    reassign_ac,
+                    op_hrs_per_year,
+                    demand_coefficients,
+                    FuelCost_USDperGallon,
+                    reassign_new_profit_per_seat,
+                    reassign_old_profit_per_seat,
+                )
+
+                # assign the aircraft to the most profitable alternative if not loss-making
+                if delta_profit_per_seat > 0.0:
+                    out_reassign_mask = None
+                    in_reassign_mask = None
+                    reassign_itin_out = None
+                    reassign_itin_in = None
                     (
-                        delta_profit_per_seat,
-                        new_origin, new_destination,
-                        addnl_flights_per_year,
-                        addnl_seat_flights_per_year,
-                    ) = reassignment.best_itin_alternative(
+                        airlines,
+                        airline_routes,
+                        airline_fleets,
                         city_data,
                         city_pair_data,
-                        city_lookup,
-                        airlines.loc[airline_id, "CountryID"],
-                        airline_routes[airline_id],
-                        airline_fleets[airline_id],
-                        aircraft_data,
+                    ) = reassignment.reassign_ac_to_new_route(
+                        new_origin,
+                        new_destination,
+                        out_reassign_mask,
+                        in_reassign_mask,
+                        reassign_itin_out,
+                        reassign_itin_in,
                         reassign_ac,
-                        op_hrs_per_year,
+                        addnl_flights_per_year,
+                        addnl_seat_flights_per_year,
+                        city_pair_data,
+                        city_data,
+                        airline_routes,
+                        airlines,
+                        airline_id,
+                        airline_fleets,
+                        aircraft_data,
                         demand_coefficients,
-                        FuelCost_USDperGallon,
-                        reassign_new_profit_per_seat,
-                        reassign_old_profit_per_seat,
+                        op_hrs_per_year,
                     )
+                else:
+                    # no profitable routes available
+                    break
 
-                    # assign the aircraft to the most profitable alternative if not loss-making
-                    if delta_profit_per_seat > 0.0:
-                        out_reassign_mask = None
-                        in_reassign_mask = None
-                        reassign_itin_out = None
-                        reassign_itin_in = None
+            if len(airlines.loc[airline_id, "Grounded_acft"]) > 0:
+                # end lease on all remaining grounded aircraft
+                for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
+                    # remove aircraft from airline["n_Aircraft"]
+                    sizeclass = airline_fleets[airline_id].loc[
+                        airline_fleets[airline_id]["AircraftID"] == ac_idx, "SizeClass"
+                    ].iloc[0]
+                    airlines.loc[airline_id, "n_Aircraft"][sizeclass] -= 1
+                    
+                    # remove aircraft from airline_fleets
+                    airline_fleets[airline_id] = airline_fleets[airline_id][
+                        airline_fleets[airline_id]["AircraftID"] != ac_idx
+                    ]
+                airlines.at[airline_id, "Grounded_acft"] = []
+            else:
+                # allow airline to lease new aircraft, starting with longest range aircraft type first
+                aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
+                for _, aircraft in aircraft_data.iterrows():
+                    finished = False
+                    while not finished:
+                        # create new aircraft
+                        new_ac_dict = {
+                            "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
+                            "SizeClass": aircraft.name,
+                            "Age_years": 0,
+                            "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
+                            "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],
+                            "RouteOrigin": -1,
+                            "RouteDestination": -1,
+                            "FuelStop": -1,
+                            "Flights_perYear": 0,
+                        }
+                        new_ac_df = pd.DataFrame(new_ac_dict, index=[0])
+                        airline_fleets[airline_id] = pd.concat([airline_fleets[airline_id], new_ac_df], ignore_index=True)
+
+                        reassign_ac = airline_fleets[airline_id].iloc[-1]
+
+                        reassign_new_profit_per_seat = 0.0
+                        reassign_old_profit_per_seat = 0.0
                         (
-                            airlines,
-                            airline_routes,
-                            airline_fleets,
-                            city_data,
-                            city_pair_data,
-                        ) = reassignment.reassign_ac_to_new_route(
-                            new_origin,
-                            new_destination,
-                            out_reassign_mask,
-                            in_reassign_mask,
-                            reassign_itin_out,
-                            reassign_itin_in,
-                            reassign_ac,
+                            delta_profit_per_seat,
+                            new_origin, new_destination,
                             addnl_flights_per_year,
                             addnl_seat_flights_per_year,
-                            city_pair_data,
+                        ) = reassignment.best_itin_alternative(
                             city_data,
-                            airline_routes,
-                            airlines,
-                            airline_id,
-                            airline_fleets,
+                            city_pair_data,
+                            city_lookup,
+                            airlines.loc[airline_id, "CountryID"],
+                            airline_routes[airline_id],
+                            airline_fleets[airline_id],
                             aircraft_data,
-                            demand_coefficients,
+                            reassign_ac,
                             op_hrs_per_year,
+                            demand_coefficients,
+                            FuelCost_USDperGallon,
+                            reassign_new_profit_per_seat,
+                            reassign_old_profit_per_seat,
                         )
-                    else:
-                        # no profitable routes available
-                        finished = True
 
-                if len(airlines.loc[airline_id, "Grounded_acft"]) > 0:
-                    # end lease on all remaining grounded aircraft
-                    for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
-                        # remove aircraft from airline["n_Aircraft"]
-                        sizeclass = airline_fleets[airline_id].loc[
-                            airline_fleets[airline_id]["AircraftID"] == ac_idx, "SizeClass"
-                        ].iloc[0]
-                        airlines.loc[airline_id, "n_Aircraft"][sizeclass] -= 1
-                        
-                        # remove aircraft from airline_fleets
-                        airline_fleets[airline_id] = airline_fleets[airline_id][
-                            airline_fleets[airline_id]["AircraftID"] != ac_idx
-                        ]
-                    airlines.at[airline_id, "Grounded_acft"] = []
-                else:
-                    # allow airline to lease new aircraft, starting with longest range aircraft type first
-                    aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
-                    for _, aircraft in aircraft_data.iterrows():
-                        finished = False
-                        while not finished:
-                            # create new aircraft
-                            new_ac_dict = {
-                                "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
-                                "SizeClass": aircraft.name,
-                                "Age_years": 0,
-                                "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
-                                "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],
-                                "RouteOrigin": -1,
-                                "RouteDestination": -1,
-                                "FuelStop": -1,
-                                "Flights_perYear": 0,
-                            }
-                            new_ac_df = pd.DataFrame(new_ac_dict, index=[0])
-                            airline_fleets[airline_id] = pd.concat([airline_fleets[airline_id], new_ac_df], ignore_index=True)
-
-                            reassign_ac = airline_fleets[airline_id].iloc[-1]
-
-                            reassign_new_profit_per_seat = 0.0
-                            reassign_old_profit_per_seat = 0.0
+                        # assign the aircraft to the most profitable alternative if not loss-making
+                        if delta_profit_per_seat > 0.0:
+                            out_reassign_mask = None
+                            in_reassign_mask = None
+                            reassign_itin_out = None
+                            reassign_itin_in = None
                             (
-                                delta_profit_per_seat,
-                                new_origin, new_destination,
-                                addnl_flights_per_year,
-                                addnl_seat_flights_per_year,
-                            ) = reassignment.best_itin_alternative(
+                                airlines,
+                                airline_routes,
+                                airline_fleets,
                                 city_data,
                                 city_pair_data,
-                                city_lookup,
-                                airlines.loc[airline_id, "CountryID"],
-                                airline_routes[airline_id],
-                                airline_fleets[airline_id],
-                                aircraft_data,
+                            ) = reassignment.reassign_ac_to_new_route(
+                                new_origin,
+                                new_destination,
+                                out_reassign_mask,
+                                in_reassign_mask,
+                                reassign_itin_out,
+                                reassign_itin_in,
                                 reassign_ac,
-                                op_hrs_per_year,
+                                addnl_flights_per_year,
+                                addnl_seat_flights_per_year,
+                                city_pair_data,
+                                city_data,
+                                airline_routes,
+                                airlines,
+                                airline_id,
+                                airline_fleets,
+                                aircraft_data,
                                 demand_coefficients,
-                                FuelCost_USDperGallon,
-                                reassign_new_profit_per_seat,
-                                reassign_old_profit_per_seat,
+                                op_hrs_per_year,
                             )
 
-                            # assign the aircraft to the most profitable alternative if not loss-making
-                            if delta_profit_per_seat > 0.0:
-                                out_reassign_mask = None
-                                in_reassign_mask = None
-                                reassign_itin_out = None
-                                reassign_itin_in = None
-                                (
-                                    airlines,
-                                    airline_routes,
-                                    airline_fleets,
-                                    city_data,
-                                    city_pair_data,
-                                ) = reassignment.reassign_ac_to_new_route(
-                                    new_origin,
-                                    new_destination,
-                                    out_reassign_mask,
-                                    in_reassign_mask,
-                                    reassign_itin_out,
-                                    reassign_itin_in,
-                                    reassign_ac,
-                                    addnl_flights_per_year,
-                                    addnl_seat_flights_per_year,
-                                    city_pair_data,
-                                    city_data,
-                                    airline_routes,
-                                    airlines,
-                                    airline_id,
-                                    airline_fleets,
-                                    aircraft_data,
-                                    demand_coefficients,
-                                    op_hrs_per_year,
-                                )
-
-                                # add aircraft to airline["n_Aircraft"]
-                                airlines.loc[airline_id, "n_Aircraft"][sizeclass] += 1
-                            else:
-                                # no profitable routes available
-                                finished = True
-                                # remove aircraft that was being experimented with
-                                airline_fleets[airline_id] = airline_fleets[airline_id][
-                                    airline_fleets[airline_id]["AircraftID"] != reassign_ac["AircraftID"]
-                                ]
+                            # add aircraft to airline["n_Aircraft"]
+                            airlines.loc[airline_id, "n_Aircraft"][sizeclass] += 1
+                        else:
+                            # no profitable routes available
+                            finished = True
+                            # remove aircraft that was being experimented with
+                            airline_fleets[airline_id] = airline_fleets[airline_id][
+                                airline_fleets[airline_id]["AircraftID"] != reassign_ac["AircraftID"]
+                            ]
 
     return airline_routes, airline_fleets, city_pair_data, city_data
 
