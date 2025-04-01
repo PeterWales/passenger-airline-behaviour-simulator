@@ -118,8 +118,7 @@ def run_simulation(
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
 
-    # initialise ["itin_time_hrs"] column in airline_routes
-    for al_idx, airline in airlines.iterrows():
+    for al_idx, _ in airlines.iterrows():
         airline_routes[al_idx]["itin_time_hrs"] = 0.0
 
     # update airline itinerary times

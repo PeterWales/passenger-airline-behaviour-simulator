@@ -283,7 +283,7 @@ def initialise_fleet_assignment(
             
             seats = total_seats * (route_RPKs / possible_RPKs)
 
-            for __, aircraft in aircraft_data.iterrows():
+            for _, aircraft in aircraft_data.iterrows():
                 if seats <= (smallest_ac * min_load_factor):
                     break
                 aircraft_size = aircraft.name

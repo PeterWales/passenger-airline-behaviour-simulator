@@ -328,7 +328,7 @@ def enforce_capacity(
                 # airline doesn't operate to/from this city
                 continue
 
-            for __, out_itin in city_airline_routes.iterrows():
+            for _, out_itin in city_airline_routes.iterrows():
                 origin_id = out_itin["origin"]
                 destination_id = out_itin["destination"]
                 fuel_stop_id = out_itin["fuel_stop"]
@@ -563,7 +563,7 @@ def enforce_capacity(
             # reassign aircraft to route with highest base demand that isn't limited by capacity or aircraft range
             city_pair_data.sort_values("BaseYearODDemandPax_Est", ascending=False, inplace=True)
             assigned = False
-            for __, city_pair in city_pair_data.iterrows():
+            for _, city_pair in city_pair_data.iterrows():
                 # check whether origin or destination are in country where airline is located
                 airline_country = airlines.loc[airline_id, "CountryID"]
                 if (

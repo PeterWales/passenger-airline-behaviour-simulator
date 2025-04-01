@@ -45,17 +45,20 @@ def calc_existing_profits(
     fuel_stop_list = []
     aircraft_id_list = []
     # iterate over all routes operated by that airline
-    for out_itin_idx, out_itin in itineraries.iterrows():
+    for row_num, (out_itin_idx, out_itin) in enumerate(itineraries.iterrows()):
         # consider outbound and inbound itineraries together
-        if already_considered[out_itin_idx]:
+        if already_considered[row_num]:
             continue
 
-        in_itin_idx = itineraries[
+        in_itin_mask = (
             (itineraries["origin"] == out_itin["destination"])
             & (itineraries["destination"] == out_itin["origin"])
             & (itineraries["fuel_stop"] == out_itin["fuel_stop"])
-        ].index[0]
-        in_itin = itineraries.iloc[in_itin_idx]
+        )
+        in_itin_row = itineraries[in_itin_mask].index[0]
+        in_itin = itineraries.loc[in_itin_row]
+        # Get the row number of the inbound itinerary
+        in_itin_row_num = itineraries.index.get_loc(in_itin_row)
 
         city_pair_out = city_pair_data[
             (city_pair_data["OriginCityID"] == out_itin["origin"])
@@ -103,7 +106,7 @@ def calc_existing_profits(
             ) / itin_seats
         )
         # flag inbound route as already considered
-        already_considered[in_itin_idx] = True
+        already_considered[in_itin_row_num] = True
 
     # create dataframe of all routes and their profit per seat for that airline
     rtn_flt_dict = {
@@ -323,7 +326,7 @@ def best_itin_alternative(
     addnl_flights_per_year = 0
     addnl_seat_flights_per_year = 0
 
-    for __, city_pair in city_pair_data.iterrows():
+    for _, city_pair in city_pair_data.iterrows():
         # check whether origin or destination are in country where airline is located
         if (
             city_pair["OriginCityID"] in city_lookup[airline_country]
