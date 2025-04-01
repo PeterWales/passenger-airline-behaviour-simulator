@@ -353,7 +353,9 @@ def enforce_capacity(
                 # calculate sum of all seats that the airline has assigned to this itinerary
                 itin_seats = 0
                 for ac_id in out_itin["aircraft_ids"]:
-                    itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
+                    itin_seats += aircraft_data.loc[
+                        airline_fleets[airline_id].loc[airline_fleets[airline_id]["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"
+                    ]
 
                 # calculate profit of itinerary (outbound + inbound)
                 profit_per_seat = (
@@ -533,7 +535,9 @@ def enforce_capacity(
                 # recalculate profit per seat for next while loop iteration
                 itin_seats = 0
                 for ac_id in potential_reassign.iloc[0]["Aircraft_IDs"]:
-                    itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
+                    itin_seats += aircraft_data.loc[
+                        airline_fleets[airline_id].loc[airline_fleets[airline_id]["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"
+                    ]
                 potential_reassign.loc[potential_reassign.index[0], "Profit_perSeat"] = (
                     al.itin_profit(
                         potential_reassign.iloc[0]["Out_Fare"],

@@ -77,7 +77,7 @@ def calc_existing_profits(
         # calculate sum of all seats that the airline has assigned to this itinerary
         itin_seats = 0
         for ac_id in out_itin["aircraft_ids"]:
-            itin_seats += aircraft_data.loc[fleet_data.loc[ac_id, "SizeClass"], "Seats"]
+            itin_seats += aircraft_data.loc[fleet_data.loc[fleet_data["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"]
 
         # calculate profit per seat of itinerary (outbound + inbound)
         profit_per_seat_list.append(
@@ -216,7 +216,7 @@ def profit_after_removal(
         # calculate sum of all seats that the airline has assigned to this itinerary, minus the aircraft being reassigned
         itin_seats = 0
         for ac_id in reassign_itin_out["aircraft_ids"]:
-            itin_seats += aircraft_data.loc[fleet_df.loc[ac_id, "SizeClass"], "Seats"]
+            itin_seats += aircraft_data.loc[fleet_df.loc[fleet_df["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"]
 
         reassign_new_profit_per_seat = (
             al.itin_profit(
@@ -390,7 +390,7 @@ def best_itin_alternative(
                         # calculate sum of all seats that the airline has already assigned to this itinerary
                         itin_seats = 0
                         for ac_id in itineraries.loc[out_itin_mask, "aircraft_ids"].iloc[0]:
-                            itin_seats += aircraft_data.loc[fleet_data.loc[ac_id, "SizeClass"], "Seats"]
+                            itin_seats += aircraft_data.loc[fleet_data.loc[fleet_data["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"]
 
                         test_itin_out = copy.deepcopy(itineraries.loc[out_itin_mask])
                         test_itin_in = copy.deepcopy(itineraries.loc[in_itin_mask])
@@ -420,7 +420,7 @@ def best_itin_alternative(
                         ) / itin_seats
 
                         # calculate new profit per seat after new aircraft assigned
-                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
+                        fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
                         test_itin_out.at[test_itin_out.index[0], "flights_per_year"] += flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "seat_flights_per_year"] += seat_flights_per_year
                         test_itin_out.at[test_itin_out.index[0], "aircraft_ids"].append(int(reassign_ac["AircraftID"]))
@@ -505,11 +505,11 @@ def best_itin_alternative(
                         test_itin_in.at[test_itin_in.index[0], "seat_flights_per_year"] -= seat_flights_per_year
                         test_itin_in.at[test_itin_in.index[0], "aircraft_ids"].remove(reassign_ac["AircraftID"])
                         test_itin_in.at[test_itin_in.index[0], "exp_utility"] = in_old_exp_utility
-                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
+                        fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
                     else:
                         # airline doesn't already fly this route
                         new_itin_old_profit_per_seat = 0.0
-                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
+                        fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost
                         test_itin_out = {
                             "origin": origin_id,
                             "destination": destination_id,
@@ -580,7 +580,7 @@ def best_itin_alternative(
                         ) / aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]  # seats on this itinerary are only provided by reassigned aircraft
 
                         # reset fleet_data to avoid mutability issues
-                        fleet_data.loc[reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
+                        fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
 
                     # calculate change in profit per seat
                     test_delta_profit_per_seat = (
@@ -1054,7 +1054,7 @@ def update_profit_tracker(
     # calculate sum of all seats that the airline has assigned to this itinerary minus reassigned aircraft
     itin_seats = 0
     for ac_id in updated_reassign_itin_out["aircraft_ids"].iloc[0]:
-        itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
+        itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[airline_fleets[airline_id]["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"]
     if itin_seats == 0:
         rtn_flt_df.loc[
             (rtn_flt_df["Origin"] == reassign_itin_out["origin"])
@@ -1116,7 +1116,7 @@ def update_profit_tracker(
         # calculate sum of all seats that the airline has assigned to this itinerary including reassigned aircraft
         itin_seats = 0
         for ac_id in updated_new_itin_out["aircraft_ids"].iloc[0]:
-            itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[ac_id, "SizeClass"], "Seats"]
+            itin_seats += aircraft_data.loc[airline_fleets[airline_id].loc[airline_fleets[airline_id]["AircraftID"] == ac_id, "SizeClass"].iloc[0], "Seats"]
         rtn_flt_df.loc[
             (rtn_flt_df["Origin"] == new_origin)
             & (rtn_flt_df["Destination"] == new_destination)

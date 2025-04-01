@@ -124,6 +124,8 @@ def initialise_airlines(
     airlines["n_Aircraft"] = aircraft_lists
     airlines["Grounded_acft"] = [[] for _ in range(len(airlines))]
 
+    airlines.set_index("Airline_ID", inplace=True)
+
     return airlines
 
 
@@ -198,9 +200,7 @@ def initialise_fleet_assignment(
     ) for _ in range(n_airlines)]
 
     # iterate over all airlines
-    for _, airline in airlines.iterrows():
-        airline_id = airline["Airline_ID"]
-
+    for airline_id, airline in airlines.iterrows():
         # calculate total base RPKs for all routes the airline can operate (assume airlines can only run routes to/from their home country)
         possible_RPKs = 0.0
         distances = []
@@ -283,10 +283,9 @@ def initialise_fleet_assignment(
             
             seats = total_seats * (route_RPKs / possible_RPKs)
 
-            for _, aircraft in aircraft_data.iterrows():
+            for aircraft_size, aircraft in aircraft_data.iterrows():
                 if seats <= (smallest_ac * min_load_factor):
                     break
-                aircraft_size = aircraft.name
                 if aircraft_avail[aircraft_size] > 0:
                     # check origin and destination runways are long enough
                     if (
@@ -674,9 +673,9 @@ def optimise_fares(
     airline_routes : list[pd.DataFrame]
     city_pair_data : pd.DataFrame
     """
-    for _, airline in airlines.iterrows():
+    for airline_id, airline in airlines.iterrows():
         print(f"        Optimising fares for airline {airline['Airline_ID']}...")
-        for idx, itin in airline_routes[airline["Airline_ID"]].iterrows():
+        for idx, itin in airline_routes[airline_id].iterrows():
             city_pair = city_pair_data[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"])
@@ -684,7 +683,7 @@ def optimise_fares(
             old_fare = itin["fare"]
             new_fare = maximise_itin_profit(
                 itin,
-                airline_fleets[airline["Airline_ID"]],
+                airline_fleets[airline_id],
                 city_pair_data,
                 city_data,
                 aircraft_data,
@@ -692,7 +691,7 @@ def optimise_fares(
                 FuelCost_USDperGallon,
                 demand_coefficients,
             )
-            airline_routes[airline["Airline_ID"]].loc[idx, "fare"] = new_fare
+            airline_routes[airline_id].loc[idx, "fare"] = new_fare
 
             # save new mean fare for updating city_pair_data later
             # (don't edit in-place because airlines shouldn't know the decisions of other airlines)
@@ -901,10 +900,8 @@ def reassign_ac_for_profit(
     op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
 
     # iterate over all airlines
-    for _, airline in airlines.iterrows():
-        print(f"        Reassigning aircraft for airline {airline['Airline_ID']}")
-
-        airline_id = airline["Airline_ID"]
+    for airline_id, airline in airlines.iterrows():
+        print(f"        Reassigning aircraft for airline {airline_id}")
 
         # create dataframe of airline's existing routes and their profit per seat
         rtn_flt_df = reassignment.calc_existing_profits(
@@ -967,7 +964,7 @@ def reassign_ac_for_profit(
                 city_data,
                 city_pair_data,
                 city_lookup,
-                airlines.loc[airline_id, "CountryID"],
+                airline["CountryID"],
                 airline_routes[airline_id],
                 airline_fleets[airline_id],
                 aircraft_data,
@@ -1235,7 +1232,7 @@ def reassign_ac_for_profit(
                     city_data,
                     city_pair_data,
                     city_lookup,
-                    airlines.loc[airline_id, "CountryID"],
+                    airline["CountryID"],
                     airline_routes[airline_id],
                     airline_fleets[airline_id],
                     aircraft_data,
@@ -1300,13 +1297,13 @@ def reassign_ac_for_profit(
             else:
                 # allow airline to lease new aircraft, starting with longest range aircraft type first
                 aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
-                for _, aircraft in aircraft_data.iterrows():
+                for aircraft_size, aircraft in aircraft_data.iterrows():
                     finished = False
                     while not finished:
                         # create new aircraft
                         new_ac_dict = {
                             "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
-                            "SizeClass": aircraft.name,
+                            "SizeClass": aircraft_size,
                             "Age_years": 0,
                             "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
                             "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],
@@ -1331,7 +1328,7 @@ def reassign_ac_for_profit(
                             city_data,
                             city_pair_data,
                             city_lookup,
-                            airlines.loc[airline_id, "CountryID"],
+                            airlines["CountryID"],
                             airline_routes[airline_id],
                             airline_fleets[airline_id],
                             aircraft_data,
@@ -1397,8 +1394,7 @@ def update_itinerary_times(
     aircraft_data: pd.DataFrame,
     airline_fleets: list[pd.DataFrame],
 ) -> list[pd.DataFrame]:
-    for _, airline in airlines.iterrows():
-        airline_id = airline["Airline_ID"]
+    for airline_id, airline in airlines.iterrows():
         for idx, itin in airline_routes[airline_id].iterrows():
             # remove itinerary if no aircraft assigned and warn because this should have been dealt with elsewhere
             if itin["aircraft_ids"] == []:

@@ -226,5 +226,4 @@ def run_simulation(
         # write dataframes to files
         city_data.to_csv(os.path.join(save_folder_path, f"city_data_{year}.csv"), index=True)
         city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{year}.csv"), index=False)
-        aircraft_data.to_csv(os.path.join(save_folder_path, f"aircraft_data_{year}.csv"), index=True)
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{year}.csv"), index=False)
