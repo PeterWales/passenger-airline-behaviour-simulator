@@ -327,6 +327,16 @@ def best_itin_alternative(
     addnl_seat_flights_per_year = 0
 
     for _, city_pair in city_pair_data.iterrows():
+        # don't test the route the aircraft is already on
+        if (
+            city_pair["OriginCityID"] == reassign_ac["RouteOrigin"]
+            and city_pair["DestinationCityID"] == reassign_ac["RouteDestination"]
+        ) or (
+            city_pair["OriginCityID"] == reassign_ac["RouteDestination"]
+            and city_pair["DestinationCityID"] == reassign_ac["RouteOrigin"]
+        ):
+            continue
+
         # check whether origin or destination are in country where airline is located
         if (
             city_pair["OriginCityID"] in city_lookup[airline_country]
