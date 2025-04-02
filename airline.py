@@ -707,7 +707,7 @@ def optimise_fares(
             itin_fare_diff = new_fare - old_fare
             itin_exp_utility_diff = new_exp_utility - old_exp_utility
             prev_mean_fare = city_pair["New_Mean_Fare_USD"]
-            prev_exp_utility_sum = city_pair["New_exp_utility_sum"]
+            prev_exp_utility_sum = city_pair["New_Exp_Utility_Sum"]
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
@@ -719,12 +719,12 @@ def optimise_fares(
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
-                "New_exp_utility_sum"
+                "New_Exp_Utility_Sum"
             ] = (prev_exp_utility_sum + itin_exp_utility_diff)
 
     # update city_pair_data mean fare
     city_pair_data["Mean_Fare_USD"] = city_pair_data["New_Mean_Fare_USD"].copy()
-    city_pair_data["Exp_Utility_Sum"] = city_pair_data["New_exp_utility_sum"].copy()
+    city_pair_data["Exp_Utility_Sum"] = city_pair_data["New_Exp_Utility_Sum"].copy()
 
     # update demand for all O-D pairs
     for idx, city_pair in city_pair_data.iterrows():
