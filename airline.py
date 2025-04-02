@@ -681,6 +681,7 @@ def optimise_fares(
                 & (city_pair_data["DestinationCityID"] == itin["destination"])
             ].iloc[0]
             old_fare = itin["fare"]
+            old_exp_utility = itin["exp_utility"]
             new_fare = maximise_itin_profit(
                 itin,
                 airline_fleets[airline_id],
@@ -691,12 +692,22 @@ def optimise_fares(
                 FuelCost_USDperGallon,
                 demand_coefficients,
             )
+            new_exp_utility = demand.calc_exp_utility(
+                demand_coefficients,
+                new_fare,
+                itin["itin_time_hrs"],
+                itin["flights_per_year"],
+                itin["fuel_stop"],
+            )
             airline_routes[airline_id].loc[idx, "fare"] = new_fare
+            airline_routes[airline_id].loc[idx, "exp_utility"] = new_exp_utility
 
-            # save new mean fare for updating city_pair_data later
+            # save new mean fare and exp(utility) for updating city_pair_data later
             # (don't edit in-place because airlines shouldn't know the decisions of other airlines)
             itin_fare_diff = new_fare - old_fare
+            itin_exp_utility_diff = new_exp_utility - old_exp_utility
             prev_mean_fare = city_pair["New_Mean_Fare_USD"]
+            prev_exp_utility_sum = city_pair["New_exp_utility_sum"]
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
@@ -705,9 +716,15 @@ def optimise_fares(
                 (prev_mean_fare * city_pair["Seat_Flights_perYear"])
                 + (itin_fare_diff * itin["seat_flights_per_year"])
             ) / city_pair["Seat_Flights_perYear"]
+            city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == itin["origin"])
+                & (city_pair_data["DestinationCityID"] == itin["destination"]),
+                "New_exp_utility_sum"
+            ] = (prev_exp_utility_sum + itin_exp_utility_diff)
 
     # update city_pair_data mean fare
     city_pair_data["Mean_Fare_USD"] = city_pair_data["New_Mean_Fare_USD"].copy()
+    city_pair_data["Exp_Utility_Sum"] = city_pair_data["New_exp_utility_sum"].copy()
 
     # update demand for all O-D pairs
     for idx, city_pair in city_pair_data.iterrows():

@@ -133,6 +133,7 @@ def run_simulation(
 
     # initialise city_pair_data["New_Mean_Fare_USD"]
     city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"].copy()
+    city_pair_data["New_exp_utility_sum"] = city_pair_data["exp_utility_sum"].copy()
 
     if (
         run_parameters["RerunFareInit"] == "y"
