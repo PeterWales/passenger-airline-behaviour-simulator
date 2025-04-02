@@ -868,7 +868,7 @@ def reassign_ac_to_new_route(
                 "seat_flights_per_year": addnl_seat_flights_per_year,
                 "exp_utility": 0.0,  # calculated later
                 "fuel_stop": -1,
-                "itin_time_hrs": new_itin_time_out,
+                "itin_time_hrs": 0.0,  # calculated later
             }
             new_itin_in = {
                 "origin": new_destination,
@@ -879,7 +879,7 @@ def reassign_ac_to_new_route(
                 "seat_flights_per_year": addnl_seat_flights_per_year,
                 "exp_utility": 0.0,  # calculated later
                 "fuel_stop": -1,
-                "itin_time_hrs": new_itin_time_in,
+                "itin_time_hrs": 0.0,  # calculated later
             }
             new_itin_out = pd.Series(new_itin_out)
             new_itin_in = pd.Series(new_itin_in)
@@ -898,6 +898,8 @@ def reassign_ac_to_new_route(
                 aircraft_data,
                 airline_fleets[airline_id],
             )
+            new_itin_out["itin_time_hrs"] = new_itin_time_out
+            new_itin_in["itin_time_hrs"] = new_itin_time_in
 
             new_itin_out_exp_utility = demand.calc_exp_utility(
                 demand_coefficients,
