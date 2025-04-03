@@ -131,10 +131,6 @@ def run_simulation(
         airline_fleets,
     )
 
-    # initialise city_pair_data["New_Mean_Fare_USD"]
-    city_pair_data["New_Mean_Fare_USD"] = city_pair_data["Mean_Fare_USD"].copy()
-    city_pair_data["New_Exp_Utility_Sum"] = city_pair_data["Exp_Utility_Sum"].copy()
-
     if (
         run_parameters["RerunFareInit"] == "y"
         or run_parameters["RerunFareInit"] == "Y"

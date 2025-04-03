@@ -46,7 +46,19 @@ def update_itinerary_demand(
     demand : float
         demand in pax per year for the itinerary
     """
-    market_share = airline_route["exp_utility"] / city_pair["Exp_Utility_Sum"]
+    if city_pair["Exp_Utility_Sum"] == 0:
+        # accounts for case where only one aircraft is on the route and the fare is too high
+        market_share = 0.0
+    elif airline_route["exp_utility"] > city_pair["Exp_Utility_Sum"]:
+        market_share = 1.0
+        if airline_route["exp_utility"] - city_pair["Exp_Utility_Sum"] > 1.0:
+            print(
+                f"WARNING [update_itinerary_demand]: "
+                f"airline_route['exp_utility'] > city_pair['Exp_Utility_Sum']."
+            )
+    else:
+        market_share = airline_route["exp_utility"] / city_pair["Exp_Utility_Sum"]
+    
     demand = math.floor(city_pair["Total_Demand"] * market_share)
     return demand
 
@@ -54,7 +66,7 @@ def update_itinerary_demand(
 def calc_exp_utility(
     demand_coefficients: dict[str, float],
     fare: float,
-    flight_time_hrs: float,
+    itin_time_hrs: float,
     flights_per_year: int,
     fuel_stop: int,
 ):
@@ -67,8 +79,8 @@ def calc_exp_utility(
         Dictionary of demand coefficients
     fare : float
         Fare for the segment
-    flight_time_hrs : float
-        Flight time in hours
+    itin_time_hrs : float
+        Itinerary time in hours (one-way, including taxiing and a single turnaround)
     flights_per_year : int
         Number of flights per year
     fuel_stop : int
@@ -91,7 +103,7 @@ def calc_exp_utility(
 
         utility = (
             demand_coefficients["theta"]*fare
-            + demand_coefficients["k"]*flight_time_hrs
+            + demand_coefficients["k"]*itin_time_hrs
             + demand_coefficients["lambda"]*math.log(flights_per_year)
             + segment_term
         )

@@ -358,7 +358,6 @@ def enforce_capacity(
                 # calculate profit of itinerary (outbound + inbound)
                 profit_per_seat = (
                     al.itin_profit(
-                        out_itin["fare"],
                         out_itin,
                         city_pair_out,
                         origin,
@@ -368,7 +367,6 @@ def enforce_capacity(
                         FuelCost_USDperGallon,
                         demand_coefficients,
                     ) + al.itin_profit(
-                        in_itin["fare"],
                         in_itin,
                         city_pair_in,
                         destination,
@@ -538,7 +536,6 @@ def enforce_capacity(
                     ]
                 potential_reassign.loc[potential_reassign.index[0], "Profit_perSeat"] = (
                     al.itin_profit(
-                        potential_reassign.iloc[0]["Out_Fare"],
                         airline_routes[airline_id].loc[out_al_route_mask].iloc[0],
                         city_pair_data.loc[outbound_mask].iloc[0],
                         city_data.loc[reassign_ac["RouteOrigin"]],
@@ -548,7 +545,6 @@ def enforce_capacity(
                         FuelCost_USDperGallon,
                         demand_coefficients,
                     ) + al.itin_profit(
-                        potential_reassign.iloc[0]["In_Fare"],
                         airline_routes[airline_id].loc[in_al_route_mask].iloc[0],
                         city_pair_data.loc[inbound_mask].iloc[0],
                         city_data.loc[reassign_ac["RouteDestination"]],
