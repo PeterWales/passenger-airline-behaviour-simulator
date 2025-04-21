@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from pygeodesy import sphericalNvector as snv
 
 
@@ -42,42 +41,46 @@ def initialise_routes(
         "high": 14005
     }
 
-    # set CityID as index for faster lookups
-    city_data.set_index('CityID', inplace=True)
-
     # initialise whole columns
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
-    city_pair_data["seat_flights_per_year"] = 0
 
     # initialise lists using 32-bit data types where possible for memory efficiency
     n = len(city_pair_data)
     remove_idx = []
-    distance = np.full(n, fill_value=0, dtype=np.float32)
-    price_elasticity_route = np.full(n, fill_value=0, dtype=np.float32)
-    price_elasticity_national = np.full(n, fill_value=0, dtype=np.float32)
-    origin_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
-    destination_income_elasticity = np.full(n, fill_value=0, dtype=np.float32)
+    distance = np.zeros(n, dtype=np.float32)
+    origin_long = np.zeros(n, dtype=np.float32)
+    origin_lat = np.zeros(n, dtype=np.float32)
+    destination_long = np.zeros(n, dtype=np.float32)
+    destination_lat = np.zeros(n, dtype=np.float32)
+    price_elasticity_route = np.zeros(n, dtype=np.float32)
+    price_elasticity_national = np.zeros(n, dtype=np.float32)
+    origin_income_elasticity = np.zeros(n, dtype=np.float32)
+    destination_income_elasticity = np.zeros(n, dtype=np.float32)
     seat_flights_per_year = np.zeros(n, dtype=np.int32)
-    static_demand_factor = np.zeros(n)
+    static_demand_factor = np.zeros(n, dtype=np.float64)
+    exp_utility_sum = np.zeros(n, dtype=np.float64)
+    international = np.zeros(n, dtype=bool)
 
-    # show a progress bar because this step can take a while
-    for idx, route in tqdm(
-        city_pair_data.iterrows(),
-        total=city_pair_data.shape[0],
-        desc="        Routes created",
-        ascii=False,
-        ncols=75,
-    ):
+    for idx, route in city_pair_data.iterrows():
         origin_id = route["OriginCityID"]
         destination_id = route["DestinationCityID"]
 
-        if (origin_id == destination_id) or (origin_id == 0) or (destination_id == 0):
+        if (
+            (origin_id not in city_data.index)
+            or (destination_id not in city_data.index)
+            or (origin_id == destination_id)
+            or (origin_id == 0)
+            or (destination_id == 0)
+        ):
             # flag for removal
             remove_idx.append(idx)
         else:
             origin = city_data.loc[origin_id]
             destination = city_data.loc[destination_id]
+
+            # check if the route is international
+            international[idx] = origin["Country"] != destination["Country"]
 
             # calculate great circle distance between origin and destination cities
             distance[idx] = calc_great_circle_distance(
@@ -86,6 +89,12 @@ def initialise_routes(
                 destination["Latitude"],
                 destination["Longitude"]
             )
+
+            # store city coordinates to make plotting easier
+            origin_lat[idx] = origin["Latitude"]
+            origin_long[idx] = origin["Longitude"]
+            destination_lat[idx] = destination["Latitude"]
+            destination_long[idx] = destination["Longitude"]
 
             # retrieve the relevant price_elasticity of demand - note OD_1 <= OD_2
             price_elasticities_idx = price_elasticities.loc[
@@ -127,12 +136,18 @@ def initialise_routes(
             )
     
     city_pair_data['Great_Circle_Distance_m'] = distance.astype('float32')
+    city_pair_data['Origin_Latitude'] = origin_lat.astype('float32')
+    city_pair_data['Origin_Longitude'] = origin_long.astype('float32')
+    city_pair_data['Destination_Latitude'] = destination_lat.astype('float32')
+    city_pair_data['Destination_Longitude'] = destination_long.astype('float32')
     city_pair_data['Price_Elasticity_Route'] = price_elasticity_route.astype('float32')
     city_pair_data['Price_Elasticity_National'] = price_elasticity_national.astype('float32')
     city_pair_data['Origin_Income_Elasticity'] = origin_income_elasticity.astype('float32')
     city_pair_data['Destination_Income_Elasticity'] = destination_income_elasticity.astype('float32')
     city_pair_data["Seat_Flights_perYear"] = seat_flights_per_year.astype('int32')
     city_pair_data["Static_Demand_Factor"] = static_demand_factor
+    city_pair_data["Exp_Utility_Sum"] = exp_utility_sum.astype('float64')
+    city_pair_data["International"] = international.astype('bool')
 
     # remove flagged routes
     city_pair_data.drop(remove_idx, inplace=True)
@@ -370,8 +385,8 @@ def choose_fuel_stop(
 
     Returns
     -------
-    fuel_stop : int | None
-        City ID of the chosen fuel stop or None if no suitable city is found
+    fuel_stop : int
+        City ID of the chosen fuel stop or -1 if no suitable city is found
     """
     # calculate the midpoint between the origin and destination
     origin_coords = snv.LatLon(
@@ -386,7 +401,7 @@ def choose_fuel_stop(
     midpoint = origin_coords.midpointTo(destination_coords)
 
     # find the nearest city to the midpoint that has a long enough runway
-    fuel_stop = None
+    fuel_stop = -1
     min_distance = np.inf
     for city_id, city in city_data.iterrows():
         city_coords = snv.LatLon(
@@ -406,17 +421,30 @@ def choose_fuel_stop(
     return fuel_stop
 
 
-# def update_demand(self) -> None:
-#     """
-#     Update the route demand based on fare and annual static factors.
+def annual_update(
+    city_pair_data: pd.DataFrame,
+    city_data: pd.DataFrame,
+    population_elasticity: float
+):
+    """"
+    Update the non-price-dependent contribution to demand factor for all routes based on the city data and elasticities.
 
-#     Updates self.current_demand.
-#     """
-#     # TODO: add input for national taxes
-#     fare_factor = 1 + (
-#         ((self.mean_fare - self.base_mean_fare) / self.base_mean_fare)
-#         * self.price_elasticities["route"]
-#     )
-#     # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
-
-#     self.current_demand = self.base_demand * fare_factor * self.static_demand_factor
+    NOTE: When updating for a new year, the city_data DataFrame must be updated first.
+    """
+    for idx, route in city_pair_data.iterrows():
+        origin_id = route["OriginCityID"]
+        destination_id = route["DestinationCityID"]
+        city_pair_data.at[idx, "Static_Demand_Factor"] = calc_static_demand_factor(
+            city_data.loc[origin_id, "Population"],
+            city_data.loc[destination_id, "Population"],
+            city_data.loc[origin_id, "BaseYearPopulation"],
+            city_data.loc[destination_id, "BaseYearPopulation"],
+            city_data.loc[origin_id, "Income_USDpercap"],
+            city_data.loc[destination_id, "Income_USDpercap"],
+            city_data.loc[origin_id, "BaseYearIncome"],
+            city_data.loc[destination_id, "BaseYearIncome"],
+            route["Origin_Income_Elasticity"],
+            route["Destination_Income_Elasticity"],
+            population_elasticity,
+        )
+    return city_pair_data
