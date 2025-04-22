@@ -200,9 +200,9 @@ def initialise_fleet_assignment(
     ) for _ in range(n_airlines)]
 
     # iterate over all airlines
+    print(f"    Assigning aircraft to {n_airlines} airlines...")
     i = 0
     for airline_id, airline in airlines.iterrows():
-        print(f"    Assigning aircraft to {n_airlines} airlines...")
         if i % 10 == 0 and i > 0:
             print(f"        Airlines completed: {i}")
         i += 1
