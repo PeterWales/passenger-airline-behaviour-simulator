@@ -370,7 +370,8 @@ def choose_fuel_stop(
     origin: pd.Series,
     destination: pd.Series,
     aircraft_range: float,
-    min_runway_m: float
+    min_runway_m: float,
+    regions: list | None,
 ) -> int:
     """
     Choose a fuel stop city for a route based on range and runway length requirements.
@@ -382,6 +383,7 @@ def choose_fuel_stop(
     destination : pd.Series
     aircraft_range : float
     min_runway_m : float
+    regions : list | None
 
     Returns
     -------
@@ -410,14 +412,21 @@ def choose_fuel_stop(
         )
         distance = midpoint.distanceTo(city_coords)
         if distance < min_distance:
-            # check that runway and leg distances are suitable for the aircraft
-            if (
-                city["LongestRunway_m"] > min_runway_m
-                and origin_coords.distanceTo(city_coords) < aircraft_range
-                and city_coords.distanceTo(destination_coords) < aircraft_range
+            # for simplicity, if geographical scope is limited and origin and destination are inside the region, ensure fuel stop is too
+            if not (
+                regions
+                and origin["Region"] in regions
+                and destination["Region"] in regions
+                and city["Region"] not in regions
             ):
-                fuel_stop = city_id
-                min_distance = distance
+                # check that runway and leg distances are suitable for the aircraft
+                if (
+                    city["LongestRunway_m"] > min_runway_m
+                    and origin_coords.distanceTo(city_coords) < aircraft_range
+                    and city_coords.distanceTo(destination_coords) < aircraft_range
+                ):
+                    fuel_stop = city_id
+                    min_distance = distance
     return fuel_stop
 
 

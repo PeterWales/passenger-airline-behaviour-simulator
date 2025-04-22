@@ -23,6 +23,16 @@ def main():
         # create a pseudorandom number generator that generates repeatable 'randomness'
         randomGen = random.Random(x=0)
 
+        # create list of regions to simulate
+        if (
+            run_parameters["Regions"] == "all"
+            or run_parameters["Regions"] == ""
+            or run_parameters["Regions"] == "[]"
+        ):
+            regions = None  # flag to run all regions
+        else:
+            regions = run_parameters["Regions"].strip("[]").split(",")
+
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
         save_folder_path = os.path.join(file_path, f"output_{run_parameters['RunID']}")
         if not os.path.exists(save_folder_path):
@@ -141,6 +151,7 @@ def main():
                 fleet_data,
                 country_data,
                 run_parameters,
+                regions,
             )
             if run_parameters["CacheOption"] == "save":
                 with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
@@ -181,7 +192,15 @@ def main():
                     randomGen,
                     run_parameters["StartYear"],
                     demand_coefficients,
+                    regions,
                 )
+            )
+
+            airlines, city_pair_data, city_data = simulator.limit_to_region(
+                regions,
+                airlines,
+                city_pair_data,
+                city_data,
             )
 
             print("    Checking airport capacity limits...")

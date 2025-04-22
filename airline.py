@@ -5,8 +5,6 @@ import aircraft as acft
 import demand
 import reassignment
 from skopt import gp_minimize
-import os
-import copy
 import warnings
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point*", category=UserWarning)
@@ -16,6 +14,7 @@ def initialise_airlines(
     fleet_data: pd.DataFrame,
     country_data: pd.DataFrame,
     run_parameters: pd.DataFrame,
+    regions: list | None,
 ) -> pd.DataFrame:
     """
     Generate a DataFrame of airline data from contents of FleetData and CountryData files
@@ -27,6 +26,7 @@ def initialise_airlines(
     fleet_data : pd.DataFrame
     country_data : pd.DataFrame
     run_parameters : pd.DataFrame
+    regions : list | None
 
     Returns
     -------
@@ -79,7 +79,7 @@ def initialise_airlines(
         # assign aircraft to countries
         region_aircraft = fleet_data[f"Census{region}"].to_list()
         unallocated = region_aircraft.copy()
-        for (country_idx, country,) in sorted_region:
+        for (_, country,) in sorted_region:
             country_aircraft = [0] * n_aircraft_types
             # iterate through aircraft types and account for rounding issues
             for i in range(n_aircraft_types):
@@ -92,17 +92,15 @@ def initialise_airlines(
                 unallocated[i] -= country_aircraft[i]
 
             # assign aircraft to airlines within country
-            for country_airline_idx in range(run_parameters["AirlinesPerCountry"]):
+            if regions is not None and country["Region"] not in regions:
+                n_airlines = 1  # no need to create multiple airlines for a country that won't be simulated
+            else:
+                n_airlines = run_parameters["AirlinesPerCountry"]
+            for country_airline_idx in range(n_airlines):
                 n_aircraft = [0] * n_aircraft_types
                 for aircraft_type in range(n_aircraft_types):
-                    base = (
-                        country_aircraft[aircraft_type]
-                        // run_parameters["AirlinesPerCountry"]
-                    )
-                    remainder = (
-                        country_aircraft[aircraft_type]
-                        % run_parameters["AirlinesPerCountry"]
-                    )
+                    base = (country_aircraft[aircraft_type] // n_airlines)
+                    remainder = (country_aircraft[aircraft_type] % n_airlines)
                     # add one extra aircraft to each airline until the remainder is used up
                     n_aircraft[aircraft_type] = base + (
                         1 if country_airline_idx < remainder else 0
@@ -138,6 +136,7 @@ def initialise_fleet_assignment(
     randomGen: np.random.Generator,
     year: int,
     demand_coefficients: dict[str, float],
+    regions: list | None,
 ) -> tuple[
     list[pd.DataFrame],
     list[pd.DataFrame],
@@ -167,6 +166,8 @@ def initialise_fleet_assignment(
         calendar year
     demand_coefficients : dict
         dictionary of demand coefficients
+    regions : list | None
+        list of regions to include in the simulation. If None, all regions are included.
     
     Returns
     -------
@@ -181,7 +182,6 @@ def initialise_fleet_assignment(
 
     min_load_factor = 0.8  # minimum load factor for an aircraft to be assigned to a route
 
-    n_cities = len(city_data)
     n_airlines = len(airlines)
 
     # create a list of airline fleet DataFrames
@@ -346,6 +346,7 @@ def initialise_fleet_assignment(
                                     outbound_route,
                                     inbound_route,
                                     capacity_flag_list,
+                                    regions,
                                 )
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
@@ -358,7 +359,8 @@ def initialise_fleet_assignment(
                                 min(
                                     aircraft["TakeoffDist_m"],
                                     aircraft["LandingDist_m"]
-                                )
+                                ),
+                                regions,
                             )
 
                             if not (fuel_stop == -1):  # -1 if route not possible with a stop for that aircraft
@@ -411,6 +413,7 @@ def initialise_fleet_assignment(
                                         outbound_route,
                                         inbound_route,
                                         capacity_flag_list,
+                                        regions,
                                     )
 
                         else:
@@ -469,131 +472,183 @@ def create_aircraft(
     outbound_route: pd.Series,
     inbound_route: pd.Series,
     capacity_flag_list: list,
+    regions: list | None,
 ):
     op_hrs_per_year = 6205.0  # =17*365 (assume airports are closed between 11pm and 6am)
-    
-    # check if route already exists in airline_routes
-    not_route_exists = airline_routes[airline_id][
-        (airline_routes[airline_id]["origin"] == origin_id)
-        & (airline_routes[airline_id]["destination"] == destination_id)
-        & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
-    ].empty
-
-    aircraft_id_list.append(aircraft_id)
-    aircraft_size_list.append(aircraft_size)
-    aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
-    current_lease_list.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age_list[-1]))
-    breguet_factor_list.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
-    origin_id_list.append(origin_id)
-    destination_id_list.append(destination_id)
-    fuel_stop_list.append(fuel_stop)
 
     if fuel_stop == -1:
         fuel_stop_series = None
     else:
         fuel_stop_series = city_data.loc[fuel_stop]
 
-    flights_per_year_list.append(
-        acft.calc_flights_per_year(
-            city_data.loc[origin_id],
-            origin_id,
-            city_data.loc[destination_id],
-            destination_id,
-            aircraft,
-            city_pair_data,
-            fuel_stop_series,
-            fuel_stop
-        )
+    flights_per_year = acft.calc_flights_per_year(
+        city_data.loc[origin_id],
+        origin_id,
+        city_data.loc[destination_id],
+        destination_id,
+        aircraft,
+        city_pair_data,
+        fuel_stop_series,
+        fuel_stop
     )
 
-    # add movements to cities and flag if capacity limit exceeded
-    city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 2* since each flight is return
-    city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year
-    
     if (
-        (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
-        and (origin_id not in capacity_flag_list)
+        regions is None
+        or (
+            city_data.loc[origin_id, "Region"] in regions
+            and city_data.loc[destination_id, "Region"] in regions
+        )
     ):
-        capacity_flag_list.append(origin_id)
-    if (
-        (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
-        and (destination_id not in capacity_flag_list)
-    ):
-        capacity_flag_list.append(destination_id)
+        # simulating the whole world or the itinerary is contained entirely within the simulated region
 
-    if fuel_stop != -1:
-        city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
-        if (
-            (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
-            and (fuel_stop not in capacity_flag_list)
-        ):
-            capacity_flag_list.append(fuel_stop)
+        flights_per_year_list.append(flights_per_year)
 
-    seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
-
-    if not not_route_exists:
-        # airline already has aircraft assigned to this route
-        outbound_mask = (
+        # check if route already exists in airline_routes
+        not_route_exists = airline_routes[airline_id][
             (airline_routes[airline_id]["origin"] == origin_id)
             & (airline_routes[airline_id]["destination"] == destination_id)
-            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
-        )
-        inbound_mask = (
-            (airline_routes[airline_id]["origin"] == destination_id)
-            & (airline_routes[airline_id]["destination"] == origin_id)
-            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
-        )
+            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
+        ].empty
 
-    # update outbound and return route in-place in city_pair_data DataFrame
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == origin_id)
-        & (city_pair_data["DestinationCityID"] == destination_id),
-        "Seat_Flights_perYear"
-    ] += seat_flights_per_year
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == destination_id)
-        & (city_pair_data["DestinationCityID"] == origin_id),
-        "Seat_Flights_perYear"
-    ] += seat_flights_per_year
+        aircraft_id_list.append(aircraft_id)
+        aircraft_size_list.append(aircraft_size)
+        aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
+        current_lease_list.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age_list[-1]))
+        breguet_factor_list.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
+        origin_id_list.append(origin_id)
+        destination_id_list.append(destination_id)
+        fuel_stop_list.append(fuel_stop)
 
-    # update airline-specific route dataframe
-    if not_route_exists:
-        airline_routes_newrow_1 = {
-            "origin": [origin_id],
-            "destination": [destination_id],
-            "fare": [outbound_route["Fare_Est"]],
-            "aircraft_ids": [[aircraft_id]],
-            "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [0.0],  # calculated later
-            "fuel_stop": [fuel_stop]
-        }
-        new_df_1 = pd.DataFrame(airline_routes_newrow_1)
-        airline_routes_newrow_2 = {
-            "origin": [destination_id],
-            "destination": [origin_id],
-            "fare": [inbound_route["Fare_Est"]],
-            "aircraft_ids": [[aircraft_id]],
-            "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [0.0],  # calculated later
-            "fuel_stop": [fuel_stop]
-        }
-        new_df_2 = pd.DataFrame(airline_routes_newrow_2)
-        airline_routes[airline_id] = pd.concat([
-            airline_routes[airline_id], 
-            new_df_1,
-            new_df_2
-        ], ignore_index=True)
-    else:
-        airline_routes[airline_id].loc[outbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
-        airline_routes[airline_id].loc[inbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+        # add movements to cities and flag if capacity limit exceeded
+        city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
+        city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year
+        
+        if (
+            (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
+            and (origin_id not in capacity_flag_list)
+        ):
+            capacity_flag_list.append(origin_id)
+        if (
+            (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
+            and (destination_id not in capacity_flag_list)
+        ):
+            capacity_flag_list.append(destination_id)
 
-        airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] += flights_per_year_list[-1]
-        airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] += flights_per_year_list[-1]
+        if fuel_stop != -1:
+            city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+            if (
+                (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
+                and (fuel_stop not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(fuel_stop)
 
-        airline_routes[airline_id].loc[outbound_mask, "seat_flights_per_year"] += seat_flights_per_year
-        airline_routes[airline_id].loc[inbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+        seat_flights_per_year = flights_per_year * aircraft["Seats"]
+
+        if not not_route_exists:
+            # airline already has aircraft assigned to this route
+            outbound_mask = (
+                (airline_routes[airline_id]["origin"] == origin_id)
+                & (airline_routes[airline_id]["destination"] == destination_id)
+                & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
+            )
+            inbound_mask = (
+                (airline_routes[airline_id]["origin"] == destination_id)
+                & (airline_routes[airline_id]["destination"] == origin_id)
+                & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
+            )
+
+        # update outbound and return route in-place in city_pair_data DataFrame
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == origin_id)
+            & (city_pair_data["DestinationCityID"] == destination_id),
+            "Seat_Flights_perYear"
+        ] += seat_flights_per_year
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == destination_id)
+            & (city_pair_data["DestinationCityID"] == origin_id),
+            "Seat_Flights_perYear"
+        ] += seat_flights_per_year
+
+        # update airline-specific route dataframe
+        if not_route_exists:
+            airline_routes_newrow_1 = {
+                "origin": [origin_id],
+                "destination": [destination_id],
+                "fare": [outbound_route["Fare_Est"]],
+                "aircraft_ids": [[aircraft_id]],
+                "flights_per_year": [flights_per_year],
+                "seat_flights_per_year": [seat_flights_per_year],
+                "exp_utility": [0.0],  # calculated later
+                "fuel_stop": [fuel_stop]
+            }
+            new_df_1 = pd.DataFrame(airline_routes_newrow_1)
+            airline_routes_newrow_2 = {
+                "origin": [destination_id],
+                "destination": [origin_id],
+                "fare": [inbound_route["Fare_Est"]],
+                "aircraft_ids": [[aircraft_id]],
+                "flights_per_year": [flights_per_year],
+                "seat_flights_per_year": [seat_flights_per_year],
+                "exp_utility": [0.0],  # calculated later
+                "fuel_stop": [fuel_stop]
+            }
+            new_df_2 = pd.DataFrame(airline_routes_newrow_2)
+            airline_routes[airline_id] = pd.concat([
+                airline_routes[airline_id], 
+                new_df_1,
+                new_df_2
+            ], ignore_index=True)
+        else:
+            airline_routes[airline_id].loc[outbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+            airline_routes[airline_id].loc[inbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+
+            airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] += flights_per_year
+            airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] += flights_per_year
+
+            airline_routes[airline_id].loc[outbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+            airline_routes[airline_id].loc[inbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+
+    elif (
+        city_data.loc[origin_id, "Region"] in regions
+        or city_data.loc[destination_id, "Region"] in regions
+        or (fuel_stop != -1 and fuel_stop_series["Region"] in regions)
+    ):
+        # itinerary exists partially within the simulated region, so we care about movements only
+
+        # add movements to cities and flag if capacity limit exceeded
+        if city_data.loc[origin_id, "Region"] in regions:
+            movts = 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
+            city_data.loc[origin_id, "Movts_perHr"] += movts
+            city_data.loc[origin_id, "Movts_Outside"] += movts
+            if (
+                (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
+                and (origin_id not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(origin_id)
+
+        if city_data.loc[destination_id, "Region"] in regions:
+            movts = 2.0 * float(flights_per_year) / op_hrs_per_year
+            city_data.loc[destination_id, "Movts_perHr"] += movts
+            city_data.loc[destination_id, "Movts_Outside"] += movts
+            if (
+                (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
+                and (destination_id not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(destination_id)
+        
+        if fuel_stop != -1:
+            if fuel_stop_series["Region"] in regions:
+                movts = 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+                city_data.loc[fuel_stop, "Movts_perHr"] += movts
+                city_data.loc[fuel_stop, "Movts_Outside"] += movts
+                if (
+                    (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
+                    and (fuel_stop not in capacity_flag_list)
+                ):
+                    capacity_flag_list.append(fuel_stop)
+    
+    # else:
+        # itinerary exists entirely outside the simulated region => do nothing
 
     return (
         aircraft_id_list,

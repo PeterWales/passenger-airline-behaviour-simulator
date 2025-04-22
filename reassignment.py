@@ -386,10 +386,12 @@ def best_itin_alternative(
                     None,
                     -1
                 )
+                origin_movt_mult = 1.0 + city_data.loc[origin_id, "Movts_Outside_Proportion"]
+                destination_movt_mult = 1.0 + city_data.loc[destination_id, "Movts_Outside_Proportion"]
                 if (
                     flights_per_year > 0
-                    and city_data.loc[origin_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
-                    and city_data.loc[destination_id, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
+                    and city_data.loc[origin_id, "Movts_perHr"] + (2.0*origin_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
+                    and city_data.loc[destination_id, "Movts_perHr"] + (2.0*destination_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
                 ):
                     # new itinerary is possible
                     old_ac_flights_per_year = fleet_data.loc[
@@ -1058,10 +1060,13 @@ def reassign_ac_to_new_route(
 
     if not deploying:
         # adjust city_data movements
-        city_data.loc[reassign_itin_out["origin"], "Movts_perHr"] -= 2.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
-        city_data.loc[reassign_itin_out["destination"], "Movts_perHr"] -= 2.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
+        origin_movt_mult = 1.0 + city_data.loc[reassign_itin_out["origin"], "Movts_Outside_Proportion"]
+        destination_movt_mult = 1.0 + city_data.loc[reassign_itin_out["destination"], "Movts_Outside_Proportion"]
+        city_data.loc[reassign_itin_out["origin"], "Movts_perHr"] -= 2.0 * origin_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
+        city_data.loc[reassign_itin_out["destination"], "Movts_perHr"] -= 2.0 * destination_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
         if reassign_itin_out["fuel_stop"] != -1:
-            city_data.loc[reassign_itin_out["fuel_stop"], "Movts_perHr"] -= 4.0 * float(reassign_ac["Flights_perYear"])/op_hrs_per_year
+            fuel_stop_movt_mult = 1.0 + city_data.loc[reassign_itin_out["fuel_stop"], "Movts_Outside_Proportion"]
+            city_data.loc[reassign_itin_out["fuel_stop"], "Movts_perHr"] -= 4.0 * fuel_stop_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
         
         # adjust city_pair_data Exp_Utility_Sum
         city_pair_data.loc[
@@ -1077,8 +1082,10 @@ def reassign_ac_to_new_route(
     
     if not grounding:
         # adjust city_data movements
-        city_data.loc[new_origin, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
-        city_data.loc[new_destination, "Movts_perHr"] += 2.0 * float(addnl_flights_per_year)/op_hrs_per_year
+        origin_movt_mult = 1.0 + city_data.loc[new_origin, "Movts_Outside_Proportion"]
+        destination_movt_mult = 1.0 + city_data.loc[new_destination, "Movts_Outside_Proportion"]
+        city_data.loc[new_origin, "Movts_perHr"] += 2.0 * origin_movt_mult * addnl_flights_per_year/op_hrs_per_year
+        city_data.loc[new_destination, "Movts_perHr"] += 2.0 * destination_movt_mult * addnl_flights_per_year/op_hrs_per_year
 
         # adjust city_pair_data Exp_Utility_Sum
         city_pair_data.loc[
