@@ -253,25 +253,27 @@ def limit_to_region(
     if regions is not None:
         # drop airlines that are not registered in the region
         # airline_routes and airline_fleets shouldn't be altered since they are indexed by airline_id
-        for idx, airline in airlines.iterrows():
-            if airline["Region"] not in regions:
-                airlines.drop(idx, inplace=True)
+        airlines = airlines[airlines["Region"].isin(regions)]
         
         # drop routes that are not entirely contained within the region
+        to_drop = []
         for idx, route in city_pair_data.iterrows():
             origin = city_data.loc[route["OriginCityID"]]
             destination = city_data.loc[route["DestinationCityID"]]
             if origin["Region"] not in regions or destination["Region"] not in regions:
-                city_pair_data.drop(idx, inplace=True)
+                to_drop.append(idx)
+        city_pair_data.drop(to_drop, inplace=True)
         
         # drop cities that are not in the region
-        for idx, city in city_data.iterrows():
-            if city["Region"] not in regions:
-                city_data.drop(idx, inplace=True)
+        city_data = city_data[city_data["Region"].isin(regions)]
         
         # calculate proportion of city movements attributed to routes that are not entirely contained within the region
         # these proportions are held constant throughout the simulation
-        city_data.at[idx, "Movts_Outside_Proportion"] = city["Movts_Outside"] / city["Movts_perHr"]
+        for idx, city in city_data.iterrows():
+            if city["Movts_perHr"] == 0:
+                city_data.at[idx, "Movts_Outside_Proportion"] = 0.0
+            else:
+                city_data.at[idx, "Movts_Outside_Proportion"] = city["Movts_Outside"] / city["Movts_perHr"]
 
     city_data.drop(columns=["Movts_Outside"], inplace=True)  # keep proportion only to avoid confusion
 
