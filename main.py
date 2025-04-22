@@ -131,6 +131,8 @@ def main():
         with open(os.path.join(data_path, "DemandCoefficients.csv"), "r", encoding='utf-8-sig') as f:
             demand_coefficients = dict(zip(f.readline().strip().split(","), map(float, f.readline().strip().split(","))))
         
+        airport_expansion_data = pd.read_csv(os.path.join(data_path, "AirportExpansion.csv"))
+        
         fleet_data = pd.read_csv(
             os.path.join(data_path, "FleetDataPassenger.csv")
         )  # note cargo aircraft are in a seperate file
@@ -262,6 +264,7 @@ def main():
             fuel_data,
             save_folder_path,
             cache_folder_path,
+            airport_expansion_data,
             run_parameters,
         )
 

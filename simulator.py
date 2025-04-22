@@ -106,6 +106,7 @@ def run_simulation(
     fuel_data: pd.DataFrame,
     save_folder_path: str,
     cache_folder_path: str,
+    airport_expansion_data: pd.DataFrame,
     run_parameters: dict,
 ):
     base_year = run_parameters["StartYear"]
@@ -176,6 +177,7 @@ def run_simulation(
             city_lookup,
             population_data,
             income_data,
+            airport_expansion_data,
             year,
         )
         city_pair_data = route.annual_update(
