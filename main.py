@@ -31,7 +31,12 @@ def main():
         ):
             regions = None  # flag to run all regions
         else:
-            regions = run_parameters["Regions"].strip("[]").split(",")
+            regions = [int(i.strip()) for i in run_parameters["Regions"].strip("[]").split(",")]
+
+        if regions is None:
+            print("    Running global simulation...")
+        else:
+            print(f"    Running simulation for regions: {regions}")
 
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
         save_folder_path = os.path.join(file_path, f"output_{run_parameters['RunID']}")
@@ -153,9 +158,6 @@ def main():
                 run_parameters,
                 regions,
             )
-            if run_parameters["CacheOption"] == "save":
-                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
-                    pickle.dump(airlines, f)
 
         if not city_pair_data_cache:
             print("    Initialising routes...")
@@ -173,6 +175,7 @@ def main():
             or not airline_routes_cache
             or not city_pair_data_cache
             or not city_data_cache
+            or not airlines_cache
         ):
             run_parameters["RerunFareInit"] = "y"
             print("    Initialising fleet assignment...")
@@ -239,6 +242,8 @@ def main():
                 pickle.dump(airline_fleets, f)
             with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
                 pickle.dump(airline_routes, f)
+            with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
+                pickle.dump(airlines, f)
         
         # run simulation
         simulator.run_simulation(
