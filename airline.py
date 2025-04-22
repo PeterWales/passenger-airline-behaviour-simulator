@@ -212,43 +212,42 @@ def initialise_fleet_assignment(
         distances = []
         for origin_id in city_lookup[airline["CountryID"]]:
             for destination_id in city_data.index.to_list():
-                # check outbound and inbound routes exist in city_pair_data
-                if (not city_pair_data[
-                    (city_pair_data["OriginCityID"] == origin_id)
-                    & (city_pair_data["DestinationCityID"] == destination_id)
-                ].empty) and (not city_pair_data[
-                    (city_pair_data["OriginCityID"] == destination_id)
-                    & (city_pair_data["DestinationCityID"] == origin_id)
-                ].empty):
-                    if (origin_id == destination_id):
-                        continue
-                    outbound_route = city_pair_data[
+                if not (origin_id == destination_id):
+                    # check outbound and inbound routes exist in city_pair_data
+                    if (not city_pair_data[
                         (city_pair_data["OriginCityID"] == origin_id)
                         & (city_pair_data["DestinationCityID"] == destination_id)
-                    ].iloc[0]
-                    inbound_route = city_pair_data[
+                    ].empty) and (not city_pair_data[
                         (city_pair_data["OriginCityID"] == destination_id)
                         & (city_pair_data["DestinationCityID"] == origin_id)
-                    ].iloc[0]
+                    ].empty):
+                        outbound_route = city_pair_data[
+                            (city_pair_data["OriginCityID"] == origin_id)
+                            & (city_pair_data["DestinationCityID"] == destination_id)
+                        ].iloc[0]
+                        inbound_route = city_pair_data[
+                            (city_pair_data["OriginCityID"] == destination_id)
+                            & (city_pair_data["DestinationCityID"] == origin_id)
+                        ].iloc[0]
 
-                    route_RPKs = (
-                        outbound_route["BaseYearODDemandPax_Est"]
-                        * outbound_route["Great_Circle_Distance_m"]
-                    )
-                    route_RPKs += (
-                        inbound_route["BaseYearODDemandPax_Est"]
-                        * inbound_route["Great_Circle_Distance_m"]
-                    )
-                    possible_RPKs += route_RPKs
-                    # append a tuple (origin_id, destination_id, distance, RPKs) to distances list
-                    distances.append(
-                        (
-                            origin_id,
-                            destination_id,
-                            outbound_route["Great_Circle_Distance_m"],
-                            route_RPKs,
+                        route_RPKs = (
+                            outbound_route["BaseYearODDemandPax_Est"]
+                            * outbound_route["Great_Circle_Distance_m"]
                         )
-                    )
+                        route_RPKs += (
+                            inbound_route["BaseYearODDemandPax_Est"]
+                            * inbound_route["Great_Circle_Distance_m"]
+                        )
+                        possible_RPKs += route_RPKs
+                        # append a tuple (origin_id, destination_id, distance, RPKs) to distances list
+                        distances.append(
+                            (
+                                origin_id,
+                                destination_id,
+                                outbound_route["Great_Circle_Distance_m"],
+                                route_RPKs,
+                            )
+                        )
 
         # calculate total airline seat capacity
         total_seats = 0
