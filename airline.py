@@ -1483,8 +1483,12 @@ def reassign_ac_for_profit(
                     finished = False
                     while not finished:
                         # create new aircraft, add to airline_fleets and airline's grounded aircraft
+                        if len(airline_fleets[airline_id]) == 0:
+                            new_ac_id = 0
+                        else:
+                            new_ac_id = airline_fleets[airline_id]["AircraftID"].max() + 1
                         new_ac_dict = {
-                            "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
+                            "AircraftID": new_ac_id,
                             "SizeClass": aircraft_size,
                             "Age_years": 0,
                             "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
