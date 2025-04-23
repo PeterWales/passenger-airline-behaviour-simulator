@@ -247,6 +247,8 @@ def main():
                 pickle.dump(airline_routes, f)
             with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
                 pickle.dump(airlines, f)
+
+        country_data = country_data[country_data["Region"].isin(regions)]  # needs to be done every time since country_data is not saved to pkl
         
         # run simulation
         simulator.run_simulation(
