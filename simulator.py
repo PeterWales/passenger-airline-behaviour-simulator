@@ -276,6 +276,6 @@ def limit_to_region(
             else:
                 city_data.at[idx, "Movts_Outside_Proportion"] = city["Movts_Outside"] / city["Movts_perHr"]
 
-    city_data.drop(columns=["Movts_Outside"], inplace=True)  # keep proportion only to avoid confusion
+    city_data = city_data.drop(columns=["Movts_Outside"])  # keep proportion only to avoid confusion
 
     return airlines, city_pair_data, city_data, country_data
