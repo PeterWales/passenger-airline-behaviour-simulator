@@ -530,7 +530,7 @@ def annual_update(
     # apply airport capacity expansion lever if applicable
     if not airport_expansion_data.empty:
         for _, row in airport_expansion_data.iterrows():
-            if row["Year"] == year_entering:
+            if row["ExpansionYear"] == year_entering:
                 city_id = row["CityID"]
                 city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"]
 
