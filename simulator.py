@@ -232,7 +232,8 @@ def limit_to_region(
     airlines: pd.DataFrame,
     city_pair_data: pd.DataFrame,
     city_data: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    country_data: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Adjust dataframes to limit the simulation to a certain region.
 
@@ -274,7 +275,9 @@ def limit_to_region(
                 city_data.at[idx, "Movts_Outside_Proportion"] = 0.0
             else:
                 city_data.at[idx, "Movts_Outside_Proportion"] = city["Movts_Outside"] / city["Movts_perHr"]
+        
+        country_data = country_data[country_data["Region"].isin(regions)]
 
     city_data.drop(columns=["Movts_Outside"], inplace=True)  # keep proportion only to avoid confusion
 
-    return airlines, city_pair_data, city_data
+    return airlines, city_pair_data, city_data, country_data

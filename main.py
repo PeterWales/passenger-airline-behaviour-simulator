@@ -201,11 +201,12 @@ def main():
                 )
             )
 
-            airlines, city_pair_data, city_data = simulator.limit_to_region(
+            airlines, city_pair_data, city_data, country_data = simulator.limit_to_region(
                 regions,
                 airlines,
                 city_pair_data,
                 city_data,
+                country_data,
             )
 
             print("    Checking airport capacity limits...")
