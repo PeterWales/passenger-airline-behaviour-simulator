@@ -93,7 +93,11 @@ def initialise_airlines(
 
             # assign aircraft to airlines within country
             if regions is not None and country["Region"] not in regions:
-                n_airlines = 1  # no need to create multiple airlines for a country that won't be simulated
+                # no need to create multiple airlines for a country that won't be simulated
+                n_airlines = 1
+            elif sum(country_aircraft)/run_parameters["AirlinesPerCountry"] < 10:
+                # prevent small countries from having lots of tiny airlines
+                n_airlines = max(sum(country_aircraft) // 10, 1)
             else:
                 n_airlines = run_parameters["AirlinesPerCountry"]
             for country_airline_idx in range(n_airlines):
