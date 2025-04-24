@@ -457,3 +457,50 @@ def annual_update(
             population_elasticity,
         )
     return city_pair_data
+
+
+def limit_routes(
+    city_pair_data: pd.DataFrame,
+    keep_proportion: float,
+) -> pd.DataFrame:
+    """
+    Add a "RunThis" column to city_pair_data to indicate which routes to test.
+    Lowest base demand routes are removed until the desired proportion of routes is reached,
+    or there are no longer any routes which have aircraft assigned.
+
+    Parameters
+    ----------
+    city_pair_data : pd.DataFrame
+    keep_proportion : float
+        Proportion of routes to keep (0.0 < keep_proportion <= 1.0)
+    
+    Returns
+    -------
+    city_pair_data : pd.DataFrame
+        DataFrame with additional "RunThis" column (1 = keep, 0 = skip)
+    """
+    if keep_proportion < 1.0 and keep_proportion > 0.0:
+        # initialise column
+        city_pair_data["RunThis"] = 0
+
+        # run any routes with aircraft assigned
+        with_aircraft = city_pair_data["Seat_Flights_perYear"] > 0
+        city_pair_data.loc[with_aircraft, "RunThis"] = 1
+
+        # calculate the number of routes with no aircraft to keep
+        routes_without_aircraft = city_pair_data[~with_aircraft]
+        n_routes_to_remove = int(len(city_pair_data) * (1-keep_proportion))
+        n_routes_to_keep = max(0, len(routes_without_aircraft) - n_routes_to_remove)
+
+        if n_routes_to_keep > 0:
+            # find indices of highest demand routes without aircraft assigned
+            keep_idx = routes_without_aircraft.nlargest(
+                n_routes_to_keep,
+                "BaseYearODDemandPax_Est"
+            ).index
+            city_pair_data.loc[keep_idx, "RunThis"] = 1
+    else:
+        # keep all routes
+        city_pair_data["RunThis"] = 1
+
+    return city_pair_data

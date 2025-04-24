@@ -249,6 +249,12 @@ def main():
                 pickle.dump(airlines, f)
 
         country_data = country_data[country_data["Region"].isin(regions)]  # needs to be done every time since country_data is not saved to pkl
+
+        # limit to the most popular routes to run faster (don't include this in pkl to allow this to be changed for each sim)
+        city_pair_data = route.limit_routes(
+            city_pair_data,
+            run_parameters["RouteProportion"],
+        )
         
         # run simulation
         simulator.run_simulation(

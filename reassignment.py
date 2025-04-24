@@ -349,7 +349,8 @@ def best_itin_alternative(
     addnl_flights_per_year = 0
     addnl_seat_flights_per_year = 0
 
-    for _, city_pair in city_pair_data.iterrows():
+    # city_pair_data["RunThis"] column is used to limit simulation to the most popular routes
+    for _, city_pair in city_pair_data[city_pair_data["RunThis"] == 1].iterrows():
         # don't test the route the aircraft is already on
         if (
             city_pair["OriginCityID"] == reassign_ac["RouteOrigin"]
