@@ -499,6 +499,16 @@ def limit_routes(
                 "BaseYearODDemandPax_Est"
             ).index
             city_pair_data.loc[keep_idx, "RunThis"] = 1
+        
+        # keep both legs of a return route if one is selected (this may increase the number of routes beyond the desired proportion)
+        for idx in keep_idx:
+            origin_id = city_pair_data.at[idx, "OriginCityID"]
+            destination_id = city_pair_data.at[idx, "DestinationCityID"]
+            return_idx = city_pair_data[
+                (city_pair_data["OriginCityID"] == destination_id)
+                & (city_pair_data["DestinationCityID"] == origin_id)
+            ].index
+            city_pair_data.loc[return_idx, "RunThis"] = 1
     else:
         # keep all routes
         city_pair_data["RunThis"] = 1
