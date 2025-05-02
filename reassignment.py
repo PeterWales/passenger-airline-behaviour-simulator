@@ -350,8 +350,12 @@ def find_itin_alternative(
     addnl_flights_per_year = 0
     addnl_seat_flights_per_year = 0
 
+    # randomise order of city_pair_data to avoid aircraft always being reassigned to the same routes
     # city_pair_data["RunThis"] column is used to limit simulation to the most popular routes
-    for _, city_pair in city_pair_data[city_pair_data["RunThis"] == 1].iterrows():
+    random_order = np.random.permutation(city_pair_data[city_pair_data["RunThis"] == 1].index)
+    
+    for idx in random_order:
+        city_pair = city_pair_data.loc[idx]
         # don't test the route the aircraft is already on
         if (
             city_pair["OriginCityID"] == reassign_ac["RouteOrigin"]
