@@ -55,6 +55,10 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
             Total capacity of all airports in the city in movements per hour (takeoffs + landings)
         LongestRunway_m : float
             Length of the longest runway in the city
+        Movts_Outside : int
+            Number of movements associated with routes that are not fully contained within geographical scope
+        Movts_Outside_Proportion : float
+            Movts_Outside as a proportion of total movements for that city
 
     city_lookup list is indexed to match CountryID field in CountryData file, and contains lists of CityIDs
     If a certain country doesn't contain any cities, the corresponding list element is empty
@@ -239,6 +243,8 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     city_data["Taxi_In_mins"] = taxi_in_mins
     city_data["Capacity_MovtsPerHr"] = capacity_perhr
     city_data["Movts_perHr"] = np.zeros(len(city_data))
+    city_data["Movts_Outside"] = np.zeros(len(city_data))  # number of momements associated with routes that are not fully contained within geographical scope
+    city_data["Movts_Outside_Proportion"] = np.zeros(len(city_data))  # city_data["mvmts_outside"] as a proportion of total movements for that city
     city_data["LongestRunway_m"] = longest_runway_m
 
     return city_data, city_lookup
@@ -385,9 +391,11 @@ def enforce_capacity(
                             None,
                             -1
                         )
+                        origin_movt_mult = 1.0 + city_data.loc[new_origin, "Movts_Outside_Proportion"]
+                        destination_movt_mult = 1.0 + city_data.loc[new_destination, "Movts_Outside_Proportion"]
                         if (
-                            city_data.loc[new_origin, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[new_origin, "Capacity_MovtsPerHr"]
-                            and city_data.loc[new_destination, "Movts_perHr"] + (2*float(flights_per_year)/op_hrs_per_year) <= city_data.loc[new_destination, "Capacity_MovtsPerHr"]
+                            city_data.loc[new_origin, "Movts_perHr"] + (2*origin_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[new_origin, "Capacity_MovtsPerHr"]
+                            and city_data.loc[new_destination, "Movts_perHr"] + (2*destination_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[new_destination, "Capacity_MovtsPerHr"]
                         ):
                             # new itinerary is possible
                             addnl_seat_flights_per_year = flights_per_year * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
@@ -464,9 +472,6 @@ def enforce_capacity(
                 demand_coefficients,
             )
 
-            # # add airline ID to any new rows
-            # airline_reassign_df["Airline_ID"] = airline_id
-
             # account for the fact that reassignment.update_profit_tracker() can add new itineraries to potential_reassign
             airline_reassign_df = airline_reassign_df[
                 (airline_reassign_df["Origin"] == city_id)
@@ -508,6 +513,7 @@ def annual_update(
     city_lookup: list,
     population_data: pd.DataFrame,
     income_data: pd.DataFrame,
+    airport_expansion_data: pd.DataFrame,
     year_entering: int,
 ):
     for _, country in country_data.iterrows():
@@ -520,5 +526,12 @@ def annual_update(
         for city_id in city_lookup[country["Number"]]:
             city_data.loc[city_id, "Population"] = math.floor(city_data.loc[city_id, "Population"] * pop_multiplier)
             city_data.loc[city_id, "Income_USDpercap"] *= inc_multiplier
+
+    # apply airport capacity expansion lever if applicable
+    if not airport_expansion_data.empty:
+        for _, row in airport_expansion_data.iterrows():
+            if row["ExpansionYear"] == year_entering:
+                city_id = row["CityID"]
+                city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"]
 
     return city_data

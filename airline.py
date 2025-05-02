@@ -5,8 +5,6 @@ import aircraft as acft
 import demand
 import reassignment
 from skopt import gp_minimize
-import os
-import copy
 import warnings
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point*", category=UserWarning)
@@ -16,6 +14,7 @@ def initialise_airlines(
     fleet_data: pd.DataFrame,
     country_data: pd.DataFrame,
     run_parameters: pd.DataFrame,
+    regions: list | None,
 ) -> pd.DataFrame:
     """
     Generate a DataFrame of airline data from contents of FleetData and CountryData files
@@ -27,6 +26,7 @@ def initialise_airlines(
     fleet_data : pd.DataFrame
     country_data : pd.DataFrame
     run_parameters : pd.DataFrame
+    regions : list | None
 
     Returns
     -------
@@ -79,7 +79,7 @@ def initialise_airlines(
         # assign aircraft to countries
         region_aircraft = fleet_data[f"Census{region}"].to_list()
         unallocated = region_aircraft.copy()
-        for (country_idx, country,) in sorted_region:
+        for (_, country,) in sorted_region:
             country_aircraft = [0] * n_aircraft_types
             # iterate through aircraft types and account for rounding issues
             for i in range(n_aircraft_types):
@@ -92,17 +92,19 @@ def initialise_airlines(
                 unallocated[i] -= country_aircraft[i]
 
             # assign aircraft to airlines within country
-            for country_airline_idx in range(run_parameters["AirlinesPerCountry"]):
+            if regions is not None and country["Region"] not in regions:
+                # no need to create multiple airlines for a country that won't be simulated
+                n_airlines = 1
+            elif sum(country_aircraft)/run_parameters["AirlinesPerCountry"] < 10:
+                # prevent small countries from having lots of tiny airlines
+                n_airlines = max(sum(country_aircraft) // 10, 1)
+            else:
+                n_airlines = run_parameters["AirlinesPerCountry"]
+            for country_airline_idx in range(n_airlines):
                 n_aircraft = [0] * n_aircraft_types
                 for aircraft_type in range(n_aircraft_types):
-                    base = (
-                        country_aircraft[aircraft_type]
-                        // run_parameters["AirlinesPerCountry"]
-                    )
-                    remainder = (
-                        country_aircraft[aircraft_type]
-                        % run_parameters["AirlinesPerCountry"]
-                    )
+                    base = (country_aircraft[aircraft_type] // n_airlines)
+                    remainder = (country_aircraft[aircraft_type] % n_airlines)
                     # add one extra aircraft to each airline until the remainder is used up
                     n_aircraft[aircraft_type] = base + (
                         1 if country_airline_idx < remainder else 0
@@ -138,6 +140,7 @@ def initialise_fleet_assignment(
     randomGen: np.random.Generator,
     year: int,
     demand_coefficients: dict[str, float],
+    regions: list | None,
 ) -> tuple[
     list[pd.DataFrame],
     list[pd.DataFrame],
@@ -167,6 +170,8 @@ def initialise_fleet_assignment(
         calendar year
     demand_coefficients : dict
         dictionary of demand coefficients
+    regions : list | None
+        list of regions to include in the simulation. If None, all regions are included.
     
     Returns
     -------
@@ -181,7 +186,6 @@ def initialise_fleet_assignment(
 
     min_load_factor = 0.8  # minimum load factor for an aircraft to be assigned to a route
 
-    n_cities = len(city_data)
     n_airlines = len(airlines)
 
     # create a list of airline fleet DataFrames
@@ -200,49 +204,54 @@ def initialise_fleet_assignment(
     ) for _ in range(n_airlines)]
 
     # iterate over all airlines
+    print(f"    Assigning aircraft to {n_airlines} airlines...")
+    i = 0
     for airline_id, airline in airlines.iterrows():
+        if i % 10 == 0 and i > 0:
+            print(f"        Airlines completed: {i}")
+        i += 1
+
         # calculate total base RPKs for all routes the airline can operate (assume airlines can only run routes to/from their home country)
         possible_RPKs = 0.0
         distances = []
         for origin_id in city_lookup[airline["CountryID"]]:
             for destination_id in city_data.index.to_list():
-                # check outbound and inbound routes exist in city_pair_data
-                if (not city_pair_data[
-                    (city_pair_data["OriginCityID"] == origin_id)
-                    & (city_pair_data["DestinationCityID"] == destination_id)
-                ].empty) and (not city_pair_data[
-                    (city_pair_data["OriginCityID"] == destination_id)
-                    & (city_pair_data["DestinationCityID"] == origin_id)
-                ].empty):
-                    if (origin_id == destination_id):
-                        continue
-                    outbound_route = city_pair_data[
+                if not (origin_id == destination_id):
+                    # check outbound and inbound routes exist in city_pair_data
+                    if (not city_pair_data[
                         (city_pair_data["OriginCityID"] == origin_id)
                         & (city_pair_data["DestinationCityID"] == destination_id)
-                    ].iloc[0]
-                    inbound_route = city_pair_data[
+                    ].empty) and (not city_pair_data[
                         (city_pair_data["OriginCityID"] == destination_id)
                         & (city_pair_data["DestinationCityID"] == origin_id)
-                    ].iloc[0]
+                    ].empty):
+                        outbound_route = city_pair_data[
+                            (city_pair_data["OriginCityID"] == origin_id)
+                            & (city_pair_data["DestinationCityID"] == destination_id)
+                        ].iloc[0]
+                        inbound_route = city_pair_data[
+                            (city_pair_data["OriginCityID"] == destination_id)
+                            & (city_pair_data["DestinationCityID"] == origin_id)
+                        ].iloc[0]
 
-                    route_RPKs = (
-                        outbound_route["BaseYearODDemandPax_Est"]
-                        * outbound_route["Great_Circle_Distance_m"]
-                    )
-                    route_RPKs += (
-                        inbound_route["BaseYearODDemandPax_Est"]
-                        * inbound_route["Great_Circle_Distance_m"]
-                    )
-                    possible_RPKs += route_RPKs
-                    # append a tuple (origin_id, destination_id, distance, RPKs) to distances list
-                    distances.append(
-                        (
-                            origin_id,
-                            destination_id,
-                            outbound_route["Great_Circle_Distance_m"],
-                            route_RPKs,
+                        route_RPKs = (
+                            outbound_route["BaseYearODDemandPax_Est"]
+                            * outbound_route["Great_Circle_Distance_m"]
                         )
-                    )
+                        route_RPKs += (
+                            inbound_route["BaseYearODDemandPax_Est"]
+                            * inbound_route["Great_Circle_Distance_m"]
+                        )
+                        possible_RPKs += route_RPKs
+                        # append a tuple (origin_id, destination_id, distance, RPKs) to distances list
+                        distances.append(
+                            (
+                                origin_id,
+                                destination_id,
+                                outbound_route["Great_Circle_Distance_m"],
+                                route_RPKs,
+                            )
+                        )
 
         # calculate total airline seat capacity
         total_seats = 0
@@ -346,6 +355,7 @@ def initialise_fleet_assignment(
                                     outbound_route,
                                     inbound_route,
                                     capacity_flag_list,
+                                    regions,
                                 )
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
@@ -358,7 +368,8 @@ def initialise_fleet_assignment(
                                 min(
                                     aircraft["TakeoffDist_m"],
                                     aircraft["LandingDist_m"]
-                                )
+                                ),
+                                regions,
                             )
 
                             if not (fuel_stop == -1):  # -1 if route not possible with a stop for that aircraft
@@ -411,6 +422,7 @@ def initialise_fleet_assignment(
                                         outbound_route,
                                         inbound_route,
                                         capacity_flag_list,
+                                        regions,
                                     )
 
                         else:
@@ -469,131 +481,183 @@ def create_aircraft(
     outbound_route: pd.Series,
     inbound_route: pd.Series,
     capacity_flag_list: list,
+    regions: list | None,
 ):
     op_hrs_per_year = 6205.0  # =17*365 (assume airports are closed between 11pm and 6am)
-    
-    # check if route already exists in airline_routes
-    not_route_exists = airline_routes[airline_id][
-        (airline_routes[airline_id]["origin"] == origin_id)
-        & (airline_routes[airline_id]["destination"] == destination_id)
-        & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
-    ].empty
-
-    aircraft_id_list.append(aircraft_id)
-    aircraft_size_list.append(aircraft_size)
-    aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
-    current_lease_list.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age_list[-1]))
-    breguet_factor_list.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
-    origin_id_list.append(origin_id)
-    destination_id_list.append(destination_id)
-    fuel_stop_list.append(fuel_stop)
 
     if fuel_stop == -1:
         fuel_stop_series = None
     else:
         fuel_stop_series = city_data.loc[fuel_stop]
 
-    flights_per_year_list.append(
-        acft.calc_flights_per_year(
-            city_data.loc[origin_id],
-            origin_id,
-            city_data.loc[destination_id],
-            destination_id,
-            aircraft,
-            city_pair_data,
-            fuel_stop_series,
-            fuel_stop
-        )
+    flights_per_year = acft.calc_flights_per_year(
+        city_data.loc[origin_id],
+        origin_id,
+        city_data.loc[destination_id],
+        destination_id,
+        aircraft,
+        city_pair_data,
+        fuel_stop_series,
+        fuel_stop
     )
 
-    # add movements to cities and flag if capacity limit exceeded
-    city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 2* since each flight is return
-    city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year_list[-1]) / op_hrs_per_year
-    
     if (
-        (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
-        and (origin_id not in capacity_flag_list)
+        regions is None
+        or (
+            city_data.loc[origin_id, "Region"] in regions
+            and city_data.loc[destination_id, "Region"] in regions
+        )
     ):
-        capacity_flag_list.append(origin_id)
-    if (
-        (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
-        and (destination_id not in capacity_flag_list)
-    ):
-        capacity_flag_list.append(destination_id)
+        # simulating the whole world or the itinerary is contained entirely within the simulated region
 
-    if fuel_stop != -1:
-        city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year_list[-1]) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
-        if (
-            (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
-            and (fuel_stop not in capacity_flag_list)
-        ):
-            capacity_flag_list.append(fuel_stop)
+        flights_per_year_list.append(flights_per_year)
 
-    seat_flights_per_year = flights_per_year_list[-1] * aircraft["Seats"]
-
-    if not not_route_exists:
-        # airline already has aircraft assigned to this route
-        outbound_mask = (
+        # check if route already exists in airline_routes
+        not_route_exists = airline_routes[airline_id][
             (airline_routes[airline_id]["origin"] == origin_id)
             & (airline_routes[airline_id]["destination"] == destination_id)
-            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
-        )
-        inbound_mask = (
-            (airline_routes[airline_id]["origin"] == destination_id)
-            & (airline_routes[airline_id]["destination"] == origin_id)
-            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
-        )
+            & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)  # treat as a seperate itinerary if fuel stop is different
+        ].empty
 
-    # update outbound and return route in-place in city_pair_data DataFrame
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == origin_id)
-        & (city_pair_data["DestinationCityID"] == destination_id),
-        "Seat_Flights_perYear"
-    ] += seat_flights_per_year
-    city_pair_data.loc[
-        (city_pair_data["OriginCityID"] == destination_id)
-        & (city_pair_data["DestinationCityID"] == origin_id),
-        "Seat_Flights_perYear"
-    ] += seat_flights_per_year
+        aircraft_id_list.append(aircraft_id)
+        aircraft_size_list.append(aircraft_size)
+        aircraft_age_list.append(randomGen.randint(0, aircraft["RetirementAge_years"]-1))
+        current_lease_list.append(aircraft["LeaseRateNew_USDPerMonth"] * (aircraft["LeaseRateAnnualMultiplier"] ** aircraft_age_list[-1]))
+        breguet_factor_list.append((aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"])
+        origin_id_list.append(origin_id)
+        destination_id_list.append(destination_id)
+        fuel_stop_list.append(fuel_stop)
 
-    # update airline-specific route dataframe
-    if not_route_exists:
-        airline_routes_newrow_1 = {
-            "origin": [origin_id],
-            "destination": [destination_id],
-            "fare": [outbound_route["Fare_Est"]],
-            "aircraft_ids": [[aircraft_id]],
-            "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [0.0],  # calculated later
-            "fuel_stop": [fuel_stop]
-        }
-        new_df_1 = pd.DataFrame(airline_routes_newrow_1)
-        airline_routes_newrow_2 = {
-            "origin": [destination_id],
-            "destination": [origin_id],
-            "fare": [inbound_route["Fare_Est"]],
-            "aircraft_ids": [[aircraft_id]],
-            "flights_per_year": [flights_per_year_list[-1]],
-            "seat_flights_per_year": [seat_flights_per_year],
-            "exp_utility": [0.0],  # calculated later
-            "fuel_stop": [fuel_stop]
-        }
-        new_df_2 = pd.DataFrame(airline_routes_newrow_2)
-        airline_routes[airline_id] = pd.concat([
-            airline_routes[airline_id], 
-            new_df_1,
-            new_df_2
-        ], ignore_index=True)
-    else:
-        airline_routes[airline_id].loc[outbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
-        airline_routes[airline_id].loc[inbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+        # add movements to cities and flag if capacity limit exceeded
+        city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
+        city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year
+        
+        if (
+            (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
+            and (origin_id not in capacity_flag_list)
+        ):
+            capacity_flag_list.append(origin_id)
+        if (
+            (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
+            and (destination_id not in capacity_flag_list)
+        ):
+            capacity_flag_list.append(destination_id)
 
-        airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] += flights_per_year_list[-1]
-        airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] += flights_per_year_list[-1]
+        if fuel_stop != -1:
+            city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+            if (
+                (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
+                and (fuel_stop not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(fuel_stop)
 
-        airline_routes[airline_id].loc[outbound_mask, "seat_flights_per_year"] += seat_flights_per_year
-        airline_routes[airline_id].loc[inbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+        seat_flights_per_year = flights_per_year * aircraft["Seats"]
+
+        if not not_route_exists:
+            # airline already has aircraft assigned to this route
+            outbound_mask = (
+                (airline_routes[airline_id]["origin"] == origin_id)
+                & (airline_routes[airline_id]["destination"] == destination_id)
+                & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
+            )
+            inbound_mask = (
+                (airline_routes[airline_id]["origin"] == destination_id)
+                & (airline_routes[airline_id]["destination"] == origin_id)
+                & (airline_routes[airline_id]["fuel_stop"] == fuel_stop)
+            )
+
+        # update outbound and return route in-place in city_pair_data DataFrame
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == origin_id)
+            & (city_pair_data["DestinationCityID"] == destination_id),
+            "Seat_Flights_perYear"
+        ] += seat_flights_per_year
+        city_pair_data.loc[
+            (city_pair_data["OriginCityID"] == destination_id)
+            & (city_pair_data["DestinationCityID"] == origin_id),
+            "Seat_Flights_perYear"
+        ] += seat_flights_per_year
+
+        # update airline-specific route dataframe
+        if not_route_exists:
+            airline_routes_newrow_1 = {
+                "origin": [origin_id],
+                "destination": [destination_id],
+                "fare": [outbound_route["Fare_Est"]],
+                "aircraft_ids": [[aircraft_id]],
+                "flights_per_year": [flights_per_year],
+                "seat_flights_per_year": [seat_flights_per_year],
+                "exp_utility": [0.0],  # calculated later
+                "fuel_stop": [fuel_stop]
+            }
+            new_df_1 = pd.DataFrame(airline_routes_newrow_1)
+            airline_routes_newrow_2 = {
+                "origin": [destination_id],
+                "destination": [origin_id],
+                "fare": [inbound_route["Fare_Est"]],
+                "aircraft_ids": [[aircraft_id]],
+                "flights_per_year": [flights_per_year],
+                "seat_flights_per_year": [seat_flights_per_year],
+                "exp_utility": [0.0],  # calculated later
+                "fuel_stop": [fuel_stop]
+            }
+            new_df_2 = pd.DataFrame(airline_routes_newrow_2)
+            airline_routes[airline_id] = pd.concat([
+                airline_routes[airline_id], 
+                new_df_1,
+                new_df_2
+            ], ignore_index=True)
+        else:
+            airline_routes[airline_id].loc[outbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+            airline_routes[airline_id].loc[inbound_mask, "aircraft_ids"].iloc[0].append(aircraft_id)
+
+            airline_routes[airline_id].loc[outbound_mask, "flights_per_year"] += flights_per_year
+            airline_routes[airline_id].loc[inbound_mask, "flights_per_year"] += flights_per_year
+
+            airline_routes[airline_id].loc[outbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+            airline_routes[airline_id].loc[inbound_mask, "seat_flights_per_year"] += seat_flights_per_year
+
+    elif (
+        city_data.loc[origin_id, "Region"] in regions
+        or city_data.loc[destination_id, "Region"] in regions
+        or (fuel_stop != -1 and fuel_stop_series["Region"] in regions)
+    ):
+        # itinerary exists partially within the simulated region, so we care about movements only
+
+        # add movements to cities and flag if capacity limit exceeded
+        if city_data.loc[origin_id, "Region"] in regions:
+            movts = 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
+            city_data.loc[origin_id, "Movts_perHr"] += movts
+            city_data.loc[origin_id, "Movts_Outside"] += movts
+            if (
+                (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
+                and (origin_id not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(origin_id)
+
+        if city_data.loc[destination_id, "Region"] in regions:
+            movts = 2.0 * float(flights_per_year) / op_hrs_per_year
+            city_data.loc[destination_id, "Movts_perHr"] += movts
+            city_data.loc[destination_id, "Movts_Outside"] += movts
+            if (
+                (city_data.loc[destination_id, "Movts_perHr"] > city_data.loc[destination_id, "Capacity_MovtsPerHr"])
+                and (destination_id not in capacity_flag_list)
+            ):
+                capacity_flag_list.append(destination_id)
+        
+        if fuel_stop != -1:
+            if fuel_stop_series["Region"] in regions:
+                movts = 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+                city_data.loc[fuel_stop, "Movts_perHr"] += movts
+                city_data.loc[fuel_stop, "Movts_Outside"] += movts
+                if (
+                    (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
+                    and (fuel_stop not in capacity_flag_list)
+                ):
+                    capacity_flag_list.append(fuel_stop)
+    
+    # else:
+        # itinerary exists entirely outside the simulated region => do nothing
 
     return (
         aircraft_id_list,
@@ -925,12 +989,23 @@ def reassign_ac_for_profit(
 
     op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
 
-    # check whether any row of city_pair_data has flights but negative or zero utility
-    if any(
-        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-        & (city_pair_data["Seat_Flights_perYear"] > 0)
-    ):
-        print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+    # initialise variable for tracking utility calc problems
+    n_util_problems = 0
+
+    # count number of itineraries with flights but negative or zero utility
+    n_util_problems_new = len(
+        city_pair_data[
+            (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+            & (city_pair_data["Seat_Flights_perYear"] > 0)
+        ]
+    )
+    if n_util_problems_new != n_util_problems:
+        print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: beginning of reassign_ac_for_profit()")
+        n_util_problems = n_util_problems_new
+        print(city_pair_data[
+            (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+            & (city_pair_data["Seat_Flights_perYear"] > 0)
+        ])
 
     # iterate over all airlines
     for airline_id, airline in airlines.iterrows():
@@ -987,12 +1062,16 @@ def reassign_ac_for_profit(
                 FuelCost_USDperGallon,
             )
 
-            # check whether any row of city_pair_data has flights but negative or zero utility
-            if any(
-                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                & (city_pair_data["Seat_Flights_perYear"] > 0)
-            ):
-                print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+            # count number of itineraries with flights but negative or zero utility
+            n_util_problems_new = len(
+                city_pair_data[
+                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                    & (city_pair_data["Seat_Flights_perYear"] > 0)
+                ]
+            )
+            if n_util_problems_new != n_util_problems:
+                print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after profit_after_removal()")
+                n_util_problems = n_util_problems_new
 
             # test new itineraries one-by-one and save the results from the most profitable
             (
@@ -1000,7 +1079,7 @@ def reassign_ac_for_profit(
                 new_origin, new_destination,
                 addnl_flights_per_year,
                 addnl_seat_flights_per_year,
-            ) = reassignment.best_itin_alternative(
+            ) = reassignment.find_itin_alternative(
                 city_data,
                 city_pair_data,
                 city_lookup,
@@ -1016,12 +1095,16 @@ def reassign_ac_for_profit(
                 reassign_old_profit_per_seat,
             )
 
-            # check whether any row of city_pair_data has flights but negative or zero utility
-            if any(
-                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                & (city_pair_data["Seat_Flights_perYear"] > 0)
-            ):
-                print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+            # count number of itineraries with flights but negative or zero utility
+            n_util_problems_new = len(
+                city_pair_data[
+                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                    & (city_pair_data["Seat_Flights_perYear"] > 0)
+                ]
+            )
+            if n_util_problems_new != n_util_problems:
+                print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after best_itin_alternative()")
+                n_util_problems = n_util_problems_new
 
             # assign the aircraft to the most profitable alternative if beneficial
             if delta_profit_per_seat > 0.0:
@@ -1063,12 +1146,16 @@ def reassign_ac_for_profit(
                     op_hrs_per_year,
                 )
 
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                # count number of itineraries with flights but negative or zero utility
+                n_util_problems_new = len(
+                    city_pair_data[
+                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                        & (city_pair_data["Seat_Flights_perYear"] > 0)
+                    ]
+                )
+                if n_util_problems_new != n_util_problems:
+                    print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after reassign_ac_to_new_route()")
+                    n_util_problems = n_util_problems_new
 
                 # update masks because an itinerary may have been added to airline_routes
                 out_reassign_mask = (
@@ -1100,12 +1187,16 @@ def reassign_ac_for_profit(
                     demand_coefficients,
                 )
 
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                # count number of itineraries with flights but negative or zero utility
+                n_util_problems_new = len(
+                    city_pair_data[
+                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                        & (city_pair_data["Seat_Flights_perYear"] > 0)
+                    ]
+                )
+                if n_util_problems_new != n_util_problems:
+                    print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after update_profit_tracker()")
+                    n_util_problems = n_util_problems_new
 
                 # if no planes left, remove itinerary from airline_routes and rtn_flt_df
                 if len(airline_routes[airline_id].loc[out_reassign_mask, "aircraft_ids"].iloc[0]) == 0:
@@ -1125,17 +1216,20 @@ def reassign_ac_for_profit(
                             (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"])
                         ].index
                     )
-                
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
-                
             else:
                 # if no beneficial change can be made, finished = True
                 finished = True
+
+        # count number of itineraries with flights but negative or zero utility
+        n_util_problems_new = len(
+            city_pair_data[
+                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                & (city_pair_data["Seat_Flights_perYear"] > 0)
+            ]
+        )
+        if n_util_problems_new != n_util_problems:
+            print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: before dealing with grounding and leases")
+            n_util_problems = n_util_problems_new
             
         # deal with grounding and leases where appropriate
         rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
@@ -1144,13 +1238,6 @@ def reassign_ac_for_profit(
             len(rtn_flt_df) > 0
             and rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0
         ):
-            # check whether any row of city_pair_data has flights but negative or zero utility
-            if any(
-                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                & (city_pair_data["Seat_Flights_perYear"] > 0)
-            ):
-                print("WARNING: Some itineraries have negative or zero utility despite having flights.")
-
             # end lease on all currently grounded aircraft
             for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
                 # remove aircraft from airline["n_Aircraft"]
@@ -1170,13 +1257,6 @@ def reassign_ac_for_profit(
                 len(rtn_flt_df) > 0
                 and rtn_flt_df["Profit_perSeat"].iloc[0] < 0.0
             ):
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
-
                 reassign_row = rtn_flt_df.iloc[0]  # least profitable itinerary
                 reassign_itin_out = airline_routes[airline_id].loc[
                     (airline_routes[airline_id]["origin"] == reassign_row["Origin"])
@@ -1238,12 +1318,16 @@ def reassign_ac_for_profit(
                     op_hrs_per_year,
                 )
 
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                # count number of itineraries with flights but negative or zero utility
+                n_util_problems_new = len(
+                    city_pair_data[
+                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                        & (city_pair_data["Seat_Flights_perYear"] > 0)
+                    ]
+                )
+                if n_util_problems_new != n_util_problems:
+                    print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after reassign_ac_to_new_route() (grounding)")
+                    n_util_problems = n_util_problems_new
 
                 # update masks because an itinerary may have been removed from airline_routes
                 out_reassign_mask = (
@@ -1275,12 +1359,16 @@ def reassign_ac_for_profit(
                     demand_coefficients,
                 )
 
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                # count number of itineraries with flights but negative or zero utility
+                n_util_problems_new = len(
+                    city_pair_data[
+                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                        & (city_pair_data["Seat_Flights_perYear"] > 0)
+                    ]
+                )
+                if n_util_problems_new != n_util_problems:
+                    print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after update_profit_tracker() (grounding)")
+                    n_util_problems = n_util_problems_new
 
                 # if no planes left, remove itinerary from airline_routes and rtn_flt_df
                 if len(airline_routes[airline_id].loc[out_reassign_mask, "aircraft_ids"].iloc[0]) == 0:
@@ -1300,13 +1388,6 @@ def reassign_ac_for_profit(
                             (rtn_flt_df["Fuel_Stop"] == reassign_itin_out["fuel_stop"])
                         ].index
                     )
-                
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
 
                 # reorder rtn_flt_df
                 rtn_flt_df.sort_values("Profit_perSeat", ascending=True, inplace=True)
@@ -1328,7 +1409,7 @@ def reassign_ac_for_profit(
                     new_origin, new_destination,
                     addnl_flights_per_year,
                     addnl_seat_flights_per_year,
-                ) = reassignment.best_itin_alternative(
+                ) = reassignment.find_itin_alternative(
                     city_data,
                     city_pair_data,
                     city_lookup,
@@ -1344,12 +1425,16 @@ def reassign_ac_for_profit(
                     reassign_old_profit_per_seat,
                 )
 
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                # count number of itineraries with flights but negative or zero utility
+                n_util_problems_new = len(
+                    city_pair_data[
+                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                        & (city_pair_data["Seat_Flights_perYear"] > 0)
+                    ]
+                )
+                if n_util_problems_new != n_util_problems:
+                    print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after best_itin_alternative() (un-grounding)")
+                    n_util_problems = n_util_problems_new
 
                 # assign the aircraft to the most profitable alternative if not loss-making
                 if delta_profit_per_seat > 0.0:
@@ -1384,12 +1469,16 @@ def reassign_ac_for_profit(
                         op_hrs_per_year,
                     )
 
-                    # check whether any row of city_pair_data has flights but negative or zero utility
-                    if any(
-                        (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                        & (city_pair_data["Seat_Flights_perYear"] > 0)
-                    ):
-                        print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                    # count number of itineraries with flights but negative or zero utility
+                    n_util_problems_new = len(
+                        city_pair_data[
+                            (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                            & (city_pair_data["Seat_Flights_perYear"] > 0)
+                        ]
+                    )
+                    if n_util_problems_new != n_util_problems:
+                        print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after reassign_ac_to_new_route() (un-grounding)")
+                        n_util_problems = n_util_problems_new
 
                 else:
                     # no profitable routes available
@@ -1409,13 +1498,6 @@ def reassign_ac_for_profit(
                         airline_fleets[airline_id]["AircraftID"] != ac_idx
                     ]
                 airlines.at[airline_id, "Grounded_acft"] = []
-
-                # check whether any row of city_pair_data has flights but negative or zero utility
-                if any(
-                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                    & (city_pair_data["Seat_Flights_perYear"] > 0)
-                ):
-                    print("WARNING: Some itineraries have negative or zero utility despite having flights.")
             else:
                 # allow airline to lease new aircraft, starting with longest range aircraft type first
                 aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
@@ -1423,8 +1505,12 @@ def reassign_ac_for_profit(
                     finished = False
                     while not finished:
                         # create new aircraft, add to airline_fleets and airline's grounded aircraft
+                        if len(airline_fleets[airline_id]) == 0:
+                            new_ac_id = 0
+                        else:
+                            new_ac_id = airline_fleets[airline_id]["AircraftID"].max() + 1
                         new_ac_dict = {
-                            "AircraftID": airline_fleets[airline_id]["AircraftID"].max() + 1,
+                            "AircraftID": new_ac_id,
                             "SizeClass": aircraft_size,
                             "Age_years": 0,
                             "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
@@ -1448,7 +1534,7 @@ def reassign_ac_for_profit(
                             new_origin, new_destination,
                             addnl_flights_per_year,
                             addnl_seat_flights_per_year,
-                        ) = reassignment.best_itin_alternative(
+                        ) = reassignment.find_itin_alternative(
                             city_data,
                             city_pair_data,
                             city_lookup,
@@ -1464,12 +1550,16 @@ def reassign_ac_for_profit(
                             reassign_old_profit_per_seat,
                         )
 
-                        # check whether any row of city_pair_data has flights but negative or zero utility
-                        if any(
-                            (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                            & (city_pair_data["Seat_Flights_perYear"] > 0)
-                        ):
-                            print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                        # count number of itineraries with flights but negative or zero utility
+                        n_util_problems_new = len(
+                            city_pair_data[
+                                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                                & (city_pair_data["Seat_Flights_perYear"] > 0)
+                            ]
+                        )
+                        if n_util_problems_new != n_util_problems:
+                            print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after best_itin_alternative() (deploying)")
+                            n_util_problems = n_util_problems_new
 
                         # assign the aircraft to the most profitable alternative if not loss-making
                         if delta_profit_per_seat > 0.0:
@@ -1504,12 +1594,16 @@ def reassign_ac_for_profit(
                                 op_hrs_per_year,
                             )
 
-                            # check whether any row of city_pair_data has flights but negative or zero utility
-                            if any(
-                                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                                & (city_pair_data["Seat_Flights_perYear"] > 0)
-                            ):
-                                print("WARNING: Some itineraries have negative or zero utility despite having flights.")
+                            # count number of itineraries with flights but negative or zero utility
+                            n_util_problems_new = len(
+                                city_pair_data[
+                                    (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+                                    & (city_pair_data["Seat_Flights_perYear"] > 0)
+                                ]
+                            )
+                            if n_util_problems_new != n_util_problems:
+                                print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: after reassign_ac_to_new_route() (deploying)")
+                                n_util_problems = n_util_problems_new
 
                             # add aircraft to airline["n_Aircraft"]
                             airlines.loc[airline_id, "n_Aircraft"][aircraft_size] += 1
@@ -1521,13 +1615,6 @@ def reassign_ac_for_profit(
                                 airline_fleets[airline_id]["AircraftID"] != reassign_ac["AircraftID"]
                             ]
                             airlines.at[airline_id, "Grounded_acft"].remove(reassign_ac["AircraftID"])
-
-                            # check whether any row of city_pair_data has flights but negative or zero utility
-                            if any(
-                                (city_pair_data["Exp_Utility_Sum"] <= 0.0)
-                                & (city_pair_data["Seat_Flights_perYear"] > 0)
-                            ):
-                                print("WARNING: Some itineraries have negative or zero utility despite having flights.")
 
     return airline_routes, airline_fleets, city_pair_data, city_data
 

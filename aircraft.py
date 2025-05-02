@@ -2,16 +2,6 @@ import math
 import pandas as pd
 
 
-# def annual_update(self) -> None:
-#     """
-#     Update lease cost and age of aircraft
-
-#     Updates self.lease_USDpermonth and self.age
-#     """
-#     self.lease_USDpermonth *= self.lease_annualmultiplier
-#     self.age += 1
-
-
 def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
     """
     Calculate an approximate max range of each aircraft type in m including reserve fuel with 80% of max payload

@@ -370,7 +370,8 @@ def choose_fuel_stop(
     origin: pd.Series,
     destination: pd.Series,
     aircraft_range: float,
-    min_runway_m: float
+    min_runway_m: float,
+    regions: list | None,
 ) -> int:
     """
     Choose a fuel stop city for a route based on range and runway length requirements.
@@ -382,6 +383,7 @@ def choose_fuel_stop(
     destination : pd.Series
     aircraft_range : float
     min_runway_m : float
+    regions : list | None
 
     Returns
     -------
@@ -410,14 +412,21 @@ def choose_fuel_stop(
         )
         distance = midpoint.distanceTo(city_coords)
         if distance < min_distance:
-            # check that runway and leg distances are suitable for the aircraft
-            if (
-                city["LongestRunway_m"] > min_runway_m
-                and origin_coords.distanceTo(city_coords) < aircraft_range
-                and city_coords.distanceTo(destination_coords) < aircraft_range
+            # for simplicity, if geographical scope is limited and origin and destination are inside the region, ensure fuel stop is too
+            if not (
+                regions
+                and origin["Region"] in regions
+                and destination["Region"] in regions
+                and city["Region"] not in regions
             ):
-                fuel_stop = city_id
-                min_distance = distance
+                # check that runway and leg distances are suitable for the aircraft
+                if (
+                    city["LongestRunway_m"] > min_runway_m
+                    and origin_coords.distanceTo(city_coords) < aircraft_range
+                    and city_coords.distanceTo(destination_coords) < aircraft_range
+                ):
+                    fuel_stop = city_id
+                    min_distance = distance
     return fuel_stop
 
 
@@ -447,4 +456,61 @@ def annual_update(
             route["Destination_Income_Elasticity"],
             population_elasticity,
         )
+    return city_pair_data
+
+
+def limit_routes(
+    city_pair_data: pd.DataFrame,
+    keep_proportion: float,
+) -> pd.DataFrame:
+    """
+    Add a "RunThis" column to city_pair_data to indicate which routes to test.
+    Lowest base demand routes are removed until the desired proportion of routes is reached,
+    or there are no longer any routes which have aircraft assigned.
+
+    Parameters
+    ----------
+    city_pair_data : pd.DataFrame
+    keep_proportion : float
+        Proportion of routes to keep (0.0 < keep_proportion <= 1.0)
+    
+    Returns
+    -------
+    city_pair_data : pd.DataFrame
+        DataFrame with additional "RunThis" column (1 = keep, 0 = skip)
+    """
+    if keep_proportion < 1.0 and keep_proportion > 0.0:
+        # initialise column
+        city_pair_data["RunThis"] = 0
+
+        # run any routes with aircraft assigned
+        with_aircraft = city_pair_data["Seat_Flights_perYear"] > 0
+        city_pair_data.loc[with_aircraft, "RunThis"] = 1
+
+        # calculate the number of routes with no aircraft to keep
+        routes_without_aircraft = city_pair_data[~with_aircraft]
+        n_routes_to_remove = int(len(city_pair_data) * (1-keep_proportion))
+        n_routes_to_keep = max(0, len(routes_without_aircraft) - n_routes_to_remove)
+
+        if n_routes_to_keep > 0:
+            # find indices of highest demand routes without aircraft assigned
+            keep_idx = routes_without_aircraft.nlargest(
+                n_routes_to_keep,
+                "BaseYearODDemandPax_Est"
+            ).index
+            city_pair_data.loc[keep_idx, "RunThis"] = 1
+        
+        # keep both legs of a return route if one is selected (this may increase the number of routes beyond the desired proportion)
+        for idx in keep_idx:
+            origin_id = city_pair_data.at[idx, "OriginCityID"]
+            destination_id = city_pair_data.at[idx, "DestinationCityID"]
+            return_idx = city_pair_data[
+                (city_pair_data["OriginCityID"] == destination_id)
+                & (city_pair_data["DestinationCityID"] == origin_id)
+            ].index
+            city_pair_data.loc[return_idx, "RunThis"] = 1
+    else:
+        # keep all routes
+        city_pair_data["RunThis"] = 1
+
     return city_pair_data

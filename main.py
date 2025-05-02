@@ -23,6 +23,21 @@ def main():
         # create a pseudorandom number generator that generates repeatable 'randomness'
         randomGen = random.Random(x=0)
 
+        # create list of regions to simulate
+        if (
+            run_parameters["Regions"] == "all"
+            or run_parameters["Regions"] == ""
+            or run_parameters["Regions"] == "[]"
+        ):
+            regions = None  # flag to run all regions
+        else:
+            regions = [int(i.strip()) for i in run_parameters["Regions"].strip("[]").split(",")]
+
+        if regions is None:
+            print("    Running global simulation...")
+        else:
+            print(f"    Running simulation for regions: {regions}")
+
         data_path = os.path.join(file_path, str(run_parameters["DataInputDirectory"]))
         save_folder_path = os.path.join(file_path, f"output_{run_parameters['RunID']}")
         if not os.path.exists(save_folder_path):
@@ -116,6 +131,8 @@ def main():
         with open(os.path.join(data_path, "DemandCoefficients.csv"), "r", encoding='utf-8-sig') as f:
             demand_coefficients = dict(zip(f.readline().strip().split(","), map(float, f.readline().strip().split(","))))
         
+        airport_expansion_data = pd.read_csv(os.path.join(data_path, "AirportExpansion.csv"))
+        
         fleet_data = pd.read_csv(
             os.path.join(data_path, "FleetDataPassenger.csv")
         )  # note cargo aircraft are in a seperate file
@@ -141,10 +158,8 @@ def main():
                 fleet_data,
                 country_data,
                 run_parameters,
+                regions,
             )
-            if run_parameters["CacheOption"] == "save":
-                with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
-                    pickle.dump(airlines, f)
 
         if not city_pair_data_cache:
             print("    Initialising routes...")
@@ -162,6 +177,7 @@ def main():
             or not airline_routes_cache
             or not city_pair_data_cache
             or not city_data_cache
+            or not airlines_cache
         ):
             run_parameters["RerunFareInit"] = "y"
             print("    Initialising fleet assignment...")
@@ -181,7 +197,16 @@ def main():
                     randomGen,
                     run_parameters["StartYear"],
                     demand_coefficients,
+                    regions,
                 )
+            )
+
+            airlines, city_pair_data, city_data, country_data = simulator.limit_to_region(
+                regions,
+                airlines,
+                city_pair_data,
+                city_data,
+                country_data,
             )
 
             print("    Checking airport capacity limits...")
@@ -220,6 +245,16 @@ def main():
                 pickle.dump(airline_fleets, f)
             with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
                 pickle.dump(airline_routes, f)
+            with open(os.path.join(cache_folder_path, "airlines.pkl"), "wb") as f:
+                pickle.dump(airlines, f)
+
+        country_data = country_data[country_data["Region"].isin(regions)]  # needs to be done every time since country_data is not saved to pkl
+
+        # limit to the most popular routes to run faster (don't include this in pkl to allow this to be changed for each sim)
+        city_pair_data = route.limit_routes(
+            city_pair_data,
+            run_parameters["RouteProportion"],
+        )
         
         # run simulation
         simulator.run_simulation(
@@ -238,6 +273,7 @@ def main():
             fuel_data,
             save_folder_path,
             cache_folder_path,
+            airport_expansion_data,
             run_parameters,
         )
 
