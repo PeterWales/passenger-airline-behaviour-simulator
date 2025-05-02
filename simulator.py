@@ -119,7 +119,7 @@ def run_simulation(
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
     
-    if run_parameters["ContinueExistingSimulation"] == "n" or run_parameters["ContinueExistingSimulation"] == "N":
+    if run_parameters["ContinueExistingSim"] == "n" or run_parameters["ContinueExistingSim"] == "N":
         start_year = base_year + 1
 
         for al_idx, _ in airlines.iterrows():
