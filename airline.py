@@ -1075,7 +1075,7 @@ def reassign_ac_for_profit(
                 new_origin, new_destination,
                 addnl_flights_per_year,
                 addnl_seat_flights_per_year,
-            ) = reassignment.best_itin_alternative(
+            ) = reassignment.find_itin_alternative(
                 city_data,
                 city_pair_data,
                 city_lookup,
@@ -1405,7 +1405,7 @@ def reassign_ac_for_profit(
                     new_origin, new_destination,
                     addnl_flights_per_year,
                     addnl_seat_flights_per_year,
-                ) = reassignment.best_itin_alternative(
+                ) = reassignment.find_itin_alternative(
                     city_data,
                     city_pair_data,
                     city_lookup,
@@ -1530,7 +1530,7 @@ def reassign_ac_for_profit(
                             new_origin, new_destination,
                             addnl_flights_per_year,
                             addnl_seat_flights_per_year,
-                        ) = reassignment.best_itin_alternative(
+                        ) = reassignment.find_itin_alternative(
                             city_data,
                             city_pair_data,
                             city_lookup,

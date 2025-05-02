@@ -282,7 +282,7 @@ def profit_after_removal(
     return reassign_new_profit_per_seat
 
 
-def best_itin_alternative(
+def find_itin_alternative(
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
     city_lookup: list[list[int]],
@@ -298,8 +298,9 @@ def best_itin_alternative(
     reassign_old_profit_per_seat: float,
 ) -> tuple[float, int, int, int, int]:
     """
-    Find the best alternative itinerary for an aircraft being reassigned, based on the profit lost by
+    Find an alternative itinerary for an aircraft being reassigned, based on the profit lost by
     removing the aircraft from its current itinerary and the profit gained by adding it to a new itinerary.
+    Stop when a beneficial change has been found or all possible alternatives have been tested
 
     Parameters
     ----------
@@ -642,13 +643,14 @@ def best_itin_alternative(
                         + reassign_new_profit_per_seat - reassign_old_profit_per_seat
                     )
 
-                    # save if beneficial
-                    if test_delta_profit_per_seat > delta_profit_per_seat:
+                    # if test makes more profit than current itinerary, save it and stop searching
+                    if test_delta_profit_per_seat > 0:
                         delta_profit_per_seat = test_delta_profit_per_seat
                         new_origin = origin_id
                         new_destination = destination_id
                         addnl_flights_per_year = flights_per_year
                         addnl_seat_flights_per_year = seat_flights_per_year
+                        break
     
     return delta_profit_per_seat, new_origin, new_destination, addnl_flights_per_year, addnl_seat_flights_per_year
 
