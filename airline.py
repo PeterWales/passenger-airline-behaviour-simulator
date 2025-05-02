@@ -1002,6 +1002,10 @@ def reassign_ac_for_profit(
     if n_util_problems_new != n_util_problems:
         print(f"WARNING: {n_util_problems_new} itineraries have negative or zero utility despite having flights. Location: beginning of reassign_ac_for_profit()")
         n_util_problems = n_util_problems_new
+        print(city_pair_data[
+            (city_pair_data["Exp_Utility_Sum"] <= 0.0)
+            & (city_pair_data["Seat_Flights_perYear"] > 0)
+        ])
 
     # iterate over all airlines
     for airline_id, airline in airlines.iterrows():
