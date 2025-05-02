@@ -118,47 +118,55 @@ def run_simulation(
     FuelCost_USDperGallon = fuel_data.loc[
         fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
+    
+    if run_parameters["ContinueExistingSimulation"] == "n" or run_parameters["ContinueExistingSimulation"] == "N":
+        start_year = base_year + 1
 
-    for al_idx, _ in airlines.iterrows():
-        airline_routes[al_idx]["itin_time_hrs"] = 0.0
+        for al_idx, _ in airlines.iterrows():
+            airline_routes[al_idx]["itin_time_hrs"] = 0.0
 
-    # update airline itinerary times
-    airline_routes = al.update_itinerary_times(
-        airlines,
-        airline_routes,
-        city_data,
-        city_pair_data,
-        aircraft_data,
-        airline_fleets,
-    )
-
-    if (
-        run_parameters["RerunFareInit"] == "y"
-        or run_parameters["RerunFareInit"] == "Y"
-    ):
-        airline_routes, city_pair_data = simulate_base_year(
-            base_year,
+        # update airline itinerary times
+        airline_routes = al.update_itinerary_times(
+            airlines,
+            airline_routes,
             city_data,
             city_pair_data,
-            airlines,
-            airline_fleets,
-            airline_routes,
             aircraft_data,
-            FuelCost_USDperGallon,
-            save_folder_path,
-            cache_folder_path,
-            max_fare,
-            iteration_limit,
-            demand_coefficients,
+            airline_fleets,
         )
 
-    # write dataframes to files
-    city_data.to_csv(os.path.join(save_folder_path, f"city_data_{base_year}.csv"), index=True)
-    city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{base_year}.csv"), index=False)
-    airlines.to_csv(os.path.join(save_folder_path, f"airlines_{base_year}.csv"), index=False)
+        if (
+            run_parameters["RerunFareInit"] == "y"
+            or run_parameters["RerunFareInit"] == "Y"
+        ):
+            airline_routes, city_pair_data = simulate_base_year(
+                base_year,
+                city_data,
+                city_pair_data,
+                airlines,
+                airline_fleets,
+                airline_routes,
+                aircraft_data,
+                FuelCost_USDperGallon,
+                save_folder_path,
+                cache_folder_path,
+                max_fare,
+                iteration_limit,
+                demand_coefficients,
+            )
+
+        # write dataframes to files
+        city_data.to_csv(os.path.join(save_folder_path, f"city_data_{base_year}.csv"), index=True)
+        city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{base_year}.csv"), index=False)
+        airlines.to_csv(os.path.join(save_folder_path, f"airlines_{base_year}.csv"), index=False)
+    else:
+        # load start year from cache
+        with open(os.path.join(cache_folder_path, "intermediate", "year_completed.pkl"), "rb") as f:
+            start_year = pickle.load(f)
+        start_year += 1
 
     # iterate over desired years
-    for year in range(base_year + 1, end_year + 1):
+    for year in range(start_year, end_year + 1):
         print(f"    Simulating year {year}...")
 
         # update data for the new year
@@ -225,6 +233,30 @@ def run_simulation(
         city_data.to_csv(os.path.join(save_folder_path, f"city_data_{year}.csv"), index=True)
         city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{year}.csv"), index=False)
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{year}.csv"), index=False)
+
+        # save to pkl so simulation can be resumed if interrupted (overwrite at the end of each year)
+        annual_cache_path = os.path.join(cache_folder_path, "intermediate")
+        if not os.path.exists(annual_cache_path):
+            os.makedirs(annual_cache_path)
+        
+        with open(os.path.join(annual_cache_path, "airlines.pkl"), "wb") as f:
+            pickle.dump(airlines, f)
+        with open(os.path.join(annual_cache_path, "airline_fleets.pkl"), "wb") as f:
+            pickle.dump(airline_fleets, f)
+        with open(os.path.join(annual_cache_path, "airline_routes.pkl"), "wb") as f:
+            pickle.dump(airline_routes, f)
+        with open(os.path.join(annual_cache_path, "city_data.pkl"), "wb") as f:
+            pickle.dump(city_data, f)
+        with open(os.path.join(annual_cache_path, "city_pair_data.pkl"), "wb") as f:
+            pickle.dump(city_pair_data, f)
+        with open(os.path.join(annual_cache_path, "city_lookup.pkl"), "wb") as f:
+            pickle.dump(city_lookup, f)
+        with open(os.path.join(annual_cache_path, "country_data.pkl"), "wb") as f:
+            pickle.dump(country_data, f)
+        with open(os.path.join(annual_cache_path, "aircraft_data.pkl"), "wb") as f:
+            pickle.dump(aircraft_data, f)
+        with open(os.path.join(annual_cache_path, "year_completed.pkl"), "wb") as f:
+            pickle.dump(year, f)
 
 
 def limit_to_region(
