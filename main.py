@@ -7,6 +7,7 @@ import aircraft
 import simulator
 import random
 import pickle
+import datetime
 
 
 def main():
@@ -18,7 +19,8 @@ def main():
     for run_idx, run_parameters in run_data.iterrows():
         print(f"\nSimulation {run_idx+1} of {n_runs}\n")
         print(f"RunNumber: {run_parameters['RunNumber']}")
-        print(f"RunID:     {run_parameters['RunID']}\n")
+        print(f"RunID:     {run_parameters['RunID']}")
+        print("Time started:", datetime.datetime.now(), "\n")
 
         # create a pseudorandom number generator that generates repeatable 'randomness'
         randomGen = random.Random(x=0)

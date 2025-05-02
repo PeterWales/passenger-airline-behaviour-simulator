@@ -5,6 +5,7 @@ import city
 import route
 import os
 import pickle
+import datetime
 
 
 def simulate_base_year(
@@ -167,7 +168,8 @@ def run_simulation(
 
     # iterate over desired years
     for year in range(start_year, end_year + 1):
-        print(f"    Simulating year {year}...")
+        print(f"\n    Simulating year {year}...")
+        print("Time: ", datetime.datetime.now(), "\n")
 
         # update data for the new year
         FuelCost_USDperGallon = fuel_data.loc[
