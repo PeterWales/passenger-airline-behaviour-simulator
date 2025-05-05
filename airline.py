@@ -430,15 +430,15 @@ def initialise_fleet_assignment(
         
         fleet_df = pd.DataFrame()
 
-        fleet_df["AircraftID"] = aircraft_id_list
-        fleet_df["SizeClass"] = aircraft_size_list
-        fleet_df["Age_years"] = aircraft_age_list
+        fleet_df["AircraftID"] = np.array(aircraft_id_list).astype(int)
+        fleet_df["SizeClass"] = np.array(aircraft_size_list).astype(int)
+        fleet_df["Age_years"] = np.array(aircraft_age_list).astype(int)
         fleet_df["Lease_USDperMonth"] = current_lease_list
         fleet_df["BreguetFactor"] = breguet_factor_list
-        fleet_df["RouteOrigin"] = origin_id_list
-        fleet_df["RouteDestination"] = destination_id_list
-        fleet_df["FuelStop"] = fuel_stop_list
-        fleet_df["Flights_perYear"] = flights_per_year_list
+        fleet_df["RouteOrigin"] = np.array(origin_id_list).astype(int)
+        fleet_df["RouteDestination"] = np.array(destination_id_list).astype(int)
+        fleet_df["FuelStop"] = np.array(fuel_stop_list).astype(int)
+        fleet_df["Flights_perYear"] = np.array(flights_per_year_list).astype(int)
 
         # calculate exp(utility) now that mean travel times can be calculated
         airline_routes, city_pair_data = recalculate_exp_utility(
@@ -1241,9 +1241,9 @@ def reassign_ac_for_profit(
             # end lease on all currently grounded aircraft
             for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
                 # remove aircraft from airline["n_Aircraft"]
-                sizeclass = airline_fleets[airline_id].loc[
+                sizeclass = int(airline_fleets[airline_id].loc[
                     airline_fleets[airline_id]["AircraftID"] == ac_idx, "SizeClass"
-                ].iloc[0]
+                ].iloc[0])
                 airlines.loc[airline_id, "n_Aircraft"][sizeclass] -= 1
 
                 # remove aircraft from airline_fleets
@@ -1488,9 +1488,9 @@ def reassign_ac_for_profit(
                 # end lease on all remaining grounded aircraft
                 for ac_idx in airlines.loc[airline_id, "Grounded_acft"]:
                     # remove aircraft from airline["n_Aircraft"]
-                    sizeclass = airline_fleets[airline_id].loc[
+                    sizeclass = int(airline_fleets[airline_id].loc[
                         airline_fleets[airline_id]["AircraftID"] == ac_idx, "SizeClass"
-                    ].iloc[0]
+                    ].iloc[0])
                     airlines.loc[airline_id, "n_Aircraft"][sizeclass] -= 1
                     
                     # remove aircraft from airline_fleets
@@ -1510,8 +1510,8 @@ def reassign_ac_for_profit(
                         else:
                             new_ac_id = airline_fleets[airline_id]["AircraftID"].max() + 1
                         new_ac_dict = {
-                            "AircraftID": new_ac_id,
-                            "SizeClass": aircraft_size,
+                            "AircraftID": int(new_ac_id),
+                            "SizeClass": int(aircraft_size),
                             "Age_years": 0,
                             "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
                             "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],
