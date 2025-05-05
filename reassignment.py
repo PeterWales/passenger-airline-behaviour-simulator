@@ -355,7 +355,7 @@ def find_itin_alternative(
     random_order = np.random.permutation(city_pair_data[city_pair_data["RunThis"] == 1].index)
     
     for idx in random_order:
-        city_pair = city_pair_data.loc[idx]
+        city_pair = city_pair_data.loc[idx].copy()  # copy explicitly to avoid SettingWithCopyWarning
         # don't test the route the aircraft is already on
         if (
             city_pair["OriginCityID"] == reassign_ac["RouteOrigin"]

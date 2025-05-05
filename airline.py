@@ -866,7 +866,7 @@ def maximise_itin_profit(
 
 def itin_profit(
     airline_route: pd.Series,
-    city_pair: pd.Series,
+    city_pair_in: pd.Series,
     origin: pd.Series,
     destination: pd.Series,
     fleet_data: pd.DataFrame,
@@ -878,6 +878,7 @@ def itin_profit(
     """
     Calculate profit for a given itinerary (one-way) and fare
     """
+    city_pair = city_pair_in.copy()  # copy explicitly to avoid SettingWithCopyWarning
     if new_itin_fare is not None:
         old_itin_fare = airline_route["fare"]
         old_itin_exp_utility = airline_route["exp_utility"]
