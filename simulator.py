@@ -237,20 +237,25 @@ def run_simulation(
         city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{year}.csv"), index=False)
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{year}.csv"), index=False)
 
-        # save to pkl so simulation can be resumed if interrupted (overwrite at the end of each year)
+        # save to pkl so simulation can be resumed if interrupted (overwrite at the end of each year unless running as baseline)
+        if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
+            suffix = f"_{year}"
+        else:
+            suffix = ""
+        
         annual_cache_path = os.path.join(cache_folder_path, "intermediate")
         if not os.path.exists(annual_cache_path):
             os.makedirs(annual_cache_path)
         
-        with open(os.path.join(annual_cache_path, "airlines.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airlines{suffix}.pkl"), "wb") as f:
             pickle.dump(airlines, f)
-        with open(os.path.join(annual_cache_path, "airline_fleets.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_fleets{suffix}.pkl"), "wb") as f:
             pickle.dump(airline_fleets, f)
-        with open(os.path.join(annual_cache_path, "airline_routes.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_routes{suffix}.pkl"), "wb") as f:
             pickle.dump(airline_routes, f)
-        with open(os.path.join(annual_cache_path, "city_data.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"city_data{suffix}.pkl"), "wb") as f:
             pickle.dump(city_data, f)
-        with open(os.path.join(annual_cache_path, "city_pair_data.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"city_pair_data{suffix}.pkl"), "wb") as f:
             pickle.dump(city_pair_data, f)
         with open(os.path.join(annual_cache_path, "city_lookup.pkl"), "wb") as f:
             pickle.dump(city_lookup, f)

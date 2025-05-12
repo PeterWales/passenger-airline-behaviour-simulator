@@ -270,15 +270,23 @@ def main():
         print("    Continuing existing simulation...")
         # load from intermediate cache
         annual_cache_path = os.path.join(cache_folder_path, "intermediate")
-        with open(os.path.join(annual_cache_path, "airlines.pkl"), "rb") as f:
+
+        if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
+            with open(os.path.join(annual_cache_path, "year_completed.pkl"), "rb") as f:
+                year_completed = pickle.load(f)
+            suffix = f"_{year_completed}"
+        else:
+            suffix = ""
+        
+        with open(os.path.join(annual_cache_path, f"airlines{suffix}.pkl"), "rb") as f:
             airlines = pickle.load(f)
-        with open(os.path.join(annual_cache_path, "airline_fleets.pkl"), "rb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_fleets{suffix}.pkl"), "rb") as f:
             airline_fleets = pickle.load(f)
-        with open(os.path.join(annual_cache_path, "airline_routes.pkl"), "rb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_routes{suffix}.pkl"), "rb") as f:
             airline_routes = pickle.load(f)
-        with open(os.path.join(annual_cache_path, "city_data.pkl"), "rb") as f:
+        with open(os.path.join(annual_cache_path, f"city_data{suffix}.pkl"), "rb") as f:
             city_data = pickle.load(f)
-        with open(os.path.join(annual_cache_path, "city_pair_data.pkl"), "rb") as f:
+        with open(os.path.join(annual_cache_path, f"city_pair_data{suffix}.pkl"), "rb") as f:
             city_pair_data = pickle.load(f)
         with open(os.path.join(annual_cache_path, "city_lookup.pkl"), "rb") as f:
             city_lookup = pickle.load(f)
