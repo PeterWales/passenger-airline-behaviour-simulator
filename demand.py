@@ -46,7 +46,7 @@ def update_itinerary_demand(
     demand : float
         demand in pax per year for the itinerary
     """
-    if city_pair["Exp_Utility_Sum"] == 0:
+    if city_pair["Exp_Utility_Sum"] <= 0 or airline_route["exp_utility"] <= 0:
         # accounts for case where only one aircraft is on the route and the fare is too high
         market_share = 0.0
     elif airline_route["exp_utility"] > city_pair["Exp_Utility_Sum"]:
@@ -94,7 +94,7 @@ def calc_exp_utility(
         exp_utility = 0
     elif flights_per_year < 0:
         exp_utility = 0
-        print(f"NEGATIVE FLIGHTS PER YEAR: {flights_per_year}")
+        print(f"WARNING: an itinerary has negative ({flights_per_year}) flights per year")
     else:
         if fuel_stop == -1:
             segment_term = demand_coefficients["mu"]

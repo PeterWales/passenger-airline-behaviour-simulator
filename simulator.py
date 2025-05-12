@@ -24,6 +24,7 @@ def simulate_base_year(
     demand_coefficients: dict[str, float],
 ) -> tuple[list[pd.DataFrame], pd.DataFrame]:
     print(f"    Simulating base year ({year})...")
+    print("    Time: ", datetime.datetime.now(), "\n")
 
     # parameters for finding Nash equilibrium
     demand_tolerance = 1000.0
@@ -85,7 +86,7 @@ def simulate_base_year(
     
     # save pkl files
     with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
-                pickle.dump(airline_routes, f)
+        pickle.dump(airline_routes, f)
     with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
         pickle.dump(city_pair_data, f)
     return airline_routes, city_pair_data
@@ -169,7 +170,7 @@ def run_simulation(
     # iterate over desired years
     for year in range(start_year, end_year + 1):
         print(f"\n    Simulating year {year}...")
-        print("Time: ", datetime.datetime.now(), "\n")
+        print("    Time: ", datetime.datetime.now(), "\n")
 
         # update data for the new year
         FuelCost_USDperGallon = fuel_data.loc[
