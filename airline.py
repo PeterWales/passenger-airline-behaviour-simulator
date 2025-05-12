@@ -33,13 +33,23 @@ def initialise_airlines(
     -------
     airlines : pd.DataFrame
     """
-    census_regions = {
-        "Americas": [10, 11, 12],
-        "Europe": [13],
-        "MiddleEast": [14],
-        "Africa": [15],
-        "AsiaPacific": [16],
-    }
+    if ("CensusAsiaPacific" in fleet_data.columns) and ("CensusMiddleEast" in fleet_data.columns):
+        # 2019 census format
+        census_regions = {
+            "Americas": [10, 11, 12],
+            "Europe": [13],
+            "MiddleEast": [14],
+            "Africa": [15],
+            "AsiaPacific": [16],
+        }
+    elif ("CensusAsiaAusMiddleEast" in fleet_data.columns):
+        # 2015 census format
+        census_regions = {
+            "Americas": [10, 11, 12],
+            "Europe": [13],
+            "AsiaAusMiddleEast": [14, 16],
+            "Africa": [15],
+        }
 
     country_data["GDP"] = (
         country_data["PPP_GDP_Cap_Year2015USD_2015"]
