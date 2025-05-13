@@ -375,6 +375,7 @@ def choose_fuel_stop(
 ) -> int:
     """
     Choose a fuel stop city for a route based on range and runway length requirements.
+    Favours cities that have a hub airport, unless the aircraft range is too short to enable this.
 
     Parameters
     ----------
@@ -402,32 +403,86 @@ def choose_fuel_stop(
 
     midpoint = origin_coords.midpointTo(destination_coords)
 
-    # find the nearest city to the midpoint that has a long enough runway
+    # find the nearest city with a hub to the midpoint that has a long enough runway
+    hub_city_data = city_data[city_data["HubStatus"] == 1]
     fuel_stop = -1
     min_distance = np.inf
-    for city_id, city in city_data.iterrows():
-        city_coords = snv.LatLon(
-            city["Latitude"],
-            city["Longitude"],
+    for city_id, city in hub_city_data.iterrows():
+        fuel_stop, min_distance = test_fuel_stop(
+            fuel_stop,
+            min_distance,
+            city,
+            city_id,
+            midpoint,
+            regions,
+            origin,
+            destination,
+            origin_coords,
+            destination_coords,
+            min_runway_m,
+            aircraft_range,
         )
-        distance = midpoint.distanceTo(city_coords)
-        if distance < min_distance:
-            # for simplicity, if geographical scope is limited and origin and destination are inside the region, ensure fuel stop is too
-            if not (
-                regions
-                and origin["Region"] in regions
-                and destination["Region"] in regions
-                and city["Region"] not in regions
-            ):
-                # check that runway and leg distances are suitable for the aircraft
-                if (
-                    city["LongestRunway_m"] > min_runway_m
-                    and origin_coords.distanceTo(city_coords) < aircraft_range
-                    and city_coords.distanceTo(destination_coords) < aircraft_range
-                ):
-                    fuel_stop = city_id
-                    min_distance = distance
+    if fuel_stop == -1:
+        # no suitable hub city found, so try again with non-hub cities
+        non_hub_city_data = city_data[city_data["HubStatus"] == 0]
+        for city_id, city in non_hub_city_data.iterrows():
+            fuel_stop, min_distance = test_fuel_stop(
+                fuel_stop,
+                min_distance,
+                city,
+                city_id,
+                midpoint,
+                regions,
+                origin,
+                destination,
+                origin_coords,
+                destination_coords,
+                min_runway_m,
+                aircraft_range,
+            )
     return fuel_stop
+
+
+def test_fuel_stop(
+    fuel_stop: int,
+    min_distance: float,
+    city: pd.Series,
+    city_id: int,
+    midpoint: snv.LatLon,
+    regions: list | None,
+    origin: pd.Series,
+    destination: pd.Series,
+    origin_coords: snv.LatLon,
+    destination_coords: snv.LatLon,
+    min_runway_m: float,
+    aircraft_range: float,
+):
+    """
+    Test a city as a potential fuel stop for a route based on distance and runway length requirements.
+    If the city is a suitable fuel stop and reduces itinerary distance, update the fuel_stop and min_distance variables.
+    """
+    city_coords = snv.LatLon(
+        city["Latitude"],
+        city["Longitude"],
+    )
+    distance = midpoint.distanceTo(city_coords)
+    if distance < min_distance:
+        # for simplicity, if geographical scope is limited and origin and destination are inside the region, ensure fuel stop is too
+        if not (
+            regions
+            and origin["Region"] in regions
+            and destination["Region"] in regions
+            and city["Region"] not in regions
+        ):
+            # check that runway and leg distances are suitable for the aircraft
+            if (
+                city["LongestRunway_m"] > min_runway_m
+                and origin_coords.distanceTo(city_coords) < aircraft_range
+                and city_coords.distanceTo(destination_coords) < aircraft_range
+            ):
+                fuel_stop = city_id
+                min_distance = distance
+    return fuel_stop, min_distance
 
 
 def annual_update(
