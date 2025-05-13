@@ -534,7 +534,14 @@ def limit_routes(
     city_pair_data : pd.DataFrame
         DataFrame with additional "RunThis" column (1 = keep, 0 = skip)
     """
-    if keep_proportion < 1.0 and keep_proportion > 0.0:
+    if keep_proportion == 1.0:
+        print("    Running with all routes")
+        city_pair_data["RunThis"] = 1
+    elif keep_proportion > 1.0 or keep_proportion <= 0.0:
+        print(f"WARNING [limit_routes]: Invalid keep_proportion ({keep_proportion}). Setting to 1.0 (running all routes).")
+        city_pair_data["RunThis"] = 1
+    else:
+        print(f"    Running with route proportion: {keep_proportion}")
         # initialise column
         city_pair_data["RunThis"] = 0
 
@@ -564,8 +571,5 @@ def limit_routes(
                 & (city_pair_data["DestinationCityID"] == origin_id)
             ].index
             city_pair_data.loc[return_idx, "RunThis"] = 1
-    else:
-        # keep all routes
-        city_pair_data["RunThis"] = 1
 
     return city_pair_data
