@@ -1,6 +1,13 @@
 import math
 import pandas as pd
-
+from constants import (
+    MAX_RANGE_PAYLOAD_PROPORTION,
+    LOITER_T_SEC,
+    DIVERSION_DIST_METRES,
+    PASSENGER_MASS_KG,
+    CURFEW_HOURS,
+    FUEL_GALLONS_PER_KG,
+)
 
 def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
     """
@@ -8,19 +15,15 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
     """
     # TODO: improve loiter fuel usage calculation
 
-    payload_proportion = 0.8
-    loiter_time_s = 30 * 60  # 30 minutes in seconds
-    diversion_distance_m = 100 * 1852  # 100 nautical miles in meters
-
     ranges = []
     for _, aircraft in aircraft_data.iterrows():
         # calculate landing weight
         landing_weight_kg = (
-            aircraft["OEM_kg"] + payload_proportion * aircraft["MaxPayload_kg"]
+            aircraft["OEM_kg"] + MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"]
         )
 
         # calculate weight before loiter using Breguet range equation
-        loiter_distance_m = loiter_time_s * aircraft["CruiseV_ms"]
+        loiter_distance_m = LOITER_T_SEC * aircraft["CruiseV_ms"]
         breguet_factor = (
             (aircraft["Breguet_gradient"] * calendar_year)
             + aircraft["Breguet_intercept"]
@@ -32,7 +35,7 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
 
         # calculate weight before 100NM diversion using Breguet range equation
         diversion_weight_kg = loiter_weight_kg * math.exp(
-            diversion_distance_m / breguet_factor
+            DIVERSION_DIST_METRES / breguet_factor
         )
 
         # calculate take-off weight (max fuel + 80% payload doesn't necessarily reach MTOM)
@@ -41,7 +44,7 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
                 aircraft["MTOM_kg"],
                 aircraft["OEM_kg"]
                 + aircraft["MaxFuel_kg"]
-                + (payload_proportion * aircraft["MaxPayload_kg"])
+                + (MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"])
             ]
         )
 
@@ -157,8 +160,6 @@ def calc_flights_per_year(
     -------
     flights_per_year : int
     """
-    curfew_time = 7  # assume airports are closed between 11pm and 6am
-
     if fuel_stop_id == -1:
         outbound_route = city_pair_data.loc[
             (city_pair_data["OriginCityID"] == origin_id)
@@ -180,12 +181,12 @@ def calc_flights_per_year(
             )
         )
 
-        if flight_time_hrs > curfew_time:
+        if flight_time_hrs > CURFEW_HOURS:
             # assume aircraft can be airborne through the night to avoid curfew
             legs_per_48hrs = math.floor(48 / mean_one_way_hrs)
         else:
             # assume aircraft must be grounded during curfew
-            legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
+            legs_per_48hrs = math.floor(2*(24 - CURFEW_HOURS) / mean_one_way_hrs)
     else:
         outbound_leg1 = city_pair_data.loc[
             (city_pair_data["OriginCityID"] == origin_id)
@@ -219,12 +220,12 @@ def calc_flights_per_year(
             )
         )
 
-        if flight_time_1_hrs > curfew_time or flight_time_2_hrs > curfew_time:
+        if flight_time_1_hrs > CURFEW_HOURS or flight_time_2_hrs > CURFEW_HOURS:
             # assume aircraft can be airborne through the night to avoid curfew
             legs_per_48hrs = math.floor(48 / mean_one_way_hrs)
         else:
             # assume aircraft must be grounded during curfew
-            legs_per_48hrs = math.floor(2*(24 - curfew_time) / mean_one_way_hrs)
+            legs_per_48hrs = math.floor(2*(24 - CURFEW_HOURS) / mean_one_way_hrs)
 
     days_operational = 365 - aircraft["MaintenanceDays_PerYear"]
     return math.floor((legs_per_48hrs * (days_operational / 2))/2)
@@ -255,22 +256,18 @@ def calc_fuel_cost(
     """
     # TODO: improve loiter fuel usage calculation
 
-    loiter_time_s = 30 * 60  # 30 minutes in seconds
-    diversion_distance_m = 100 * 1852  # 100 nautical miles in meters
-    passenger_mass_kg = 100  # average passenger mass in kg (including baggage)
-
     # calculate no-fuel weight
     nofuel_weight_kg = (
-        aircraft_type["OEM_kg"] + pax * passenger_mass_kg
+        aircraft_type["OEM_kg"] + pax * PASSENGER_MASS_KG
     )
     # calculate diversion landing weight (before possible loiter) using Breguet range equation
-    loiter_distance_m = loiter_time_s * aircraft_type["CruiseV_ms"]
+    loiter_distance_m = LOITER_T_SEC * aircraft_type["CruiseV_ms"]
     loiter_weight_kg = nofuel_weight_kg * math.exp(
         loiter_distance_m / aircraft["BreguetFactor"]
     )
     # calculate planned landing weight (before possible diversion) using Breguet range equation
     landing_weight_kg = loiter_weight_kg * math.exp(
-        diversion_distance_m / aircraft["BreguetFactor"]
+        DIVERSION_DIST_METRES / aircraft["BreguetFactor"]
     )
     # calculate take-off weight
     takeoff_weight_kg = landing_weight_kg * math.exp(
@@ -287,8 +284,8 @@ def calc_fuel_cost(
     if takeoff_weight_kg > aircraft_type["MTOM_kg"]:
         print("WARNING [calc_fuel_cost]: required take-off mass exceeds MTOM")
         print(f"Itinerary from {city_pair['OriginCityID']} to {city_pair['DestinationCityID']} with aircraft type {aircraft_type_id}")
-    # 1kg jet fuel = 1.244L, 1L = 0.264 US Gallons, fuel price in USD/gallon
-    fuel_cost_USDperflt = fuel_consumption_kg * 1.244 * 0.264 * FuelCost_USDperGallon
+    
+    fuel_cost_USDperflt = fuel_consumption_kg * FUEL_GALLONS_PER_KG * FuelCost_USDperGallon
     
     return fuel_cost_USDperflt
 

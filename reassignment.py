@@ -4,6 +4,7 @@ import copy
 import airline as al
 import aircraft as acft
 import demand
+from constants import OP_HRS_PER_YEAR
 
 
 def calc_existing_profits(
@@ -291,7 +292,6 @@ def find_itin_alternative(
     fleet_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     reassign_ac: pd.Series,
-    op_hrs_per_year: float,
     demand_coefficients: dict[str, float],
     FuelCost_USDperGallon: float,
     reassign_new_profit_per_seat: float,
@@ -320,8 +320,6 @@ def find_itin_alternative(
         DataFrame of aircraft data
     reassign_ac : pd.Series
         Series of aircraft data for the aircraft being reassigned
-    op_hrs_per_year : float
-        Number of operating hours per year
     demand_coefficients : dict
         Dictionary of demand coefficients
     FuelCost_USDperGallon : float
@@ -396,8 +394,8 @@ def find_itin_alternative(
                 destination_movt_mult = 1.0 + city_data.loc[destination_id, "Movts_Outside_Proportion"]
                 if (
                     flights_per_year > 0
-                    and city_data.loc[origin_id, "Movts_perHr"] + (2.0*origin_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
-                    and city_data.loc[destination_id, "Movts_perHr"] + (2.0*destination_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
+                    and city_data.loc[origin_id, "Movts_perHr"] + (2.0*origin_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
+                    and city_data.loc[destination_id, "Movts_perHr"] + (2.0*destination_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
                 ):
                     # new itinerary is possible
                     old_ac_flights_per_year = fleet_data.loc[
@@ -677,7 +675,6 @@ def reassign_ac_to_new_route(
     airline_fleets: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     demand_coefficients: dict[str, float],
-    op_hrs_per_year: float,
 ):
     """
     Reassign an aircraft to a new route (or ground it) and make the necessary adjustments to all dataframes.
@@ -718,8 +715,6 @@ def reassign_ac_to_new_route(
         DataFrame of aircraft data
     demand_coefficients : dict
         Dictionary of demand coefficients
-    op_hrs_per_year : float
-        Number of operating hours per year
     
     Returns
     -------
@@ -1069,11 +1064,11 @@ def reassign_ac_to_new_route(
         # adjust city_data movements
         origin_movt_mult = 1.0 + city_data.loc[reassign_itin_out["origin"], "Movts_Outside_Proportion"]
         destination_movt_mult = 1.0 + city_data.loc[reassign_itin_out["destination"], "Movts_Outside_Proportion"]
-        city_data.loc[reassign_itin_out["origin"], "Movts_perHr"] -= 2.0 * origin_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
-        city_data.loc[reassign_itin_out["destination"], "Movts_perHr"] -= 2.0 * destination_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
+        city_data.loc[reassign_itin_out["origin"], "Movts_perHr"] -= 2.0 * origin_movt_mult * reassign_ac["Flights_perYear"]/OP_HRS_PER_YEAR
+        city_data.loc[reassign_itin_out["destination"], "Movts_perHr"] -= 2.0 * destination_movt_mult * reassign_ac["Flights_perYear"]/OP_HRS_PER_YEAR
         if reassign_itin_out["fuel_stop"] != -1:
             fuel_stop_movt_mult = 1.0 + city_data.loc[reassign_itin_out["fuel_stop"], "Movts_Outside_Proportion"]
-            city_data.loc[reassign_itin_out["fuel_stop"], "Movts_perHr"] -= 4.0 * fuel_stop_movt_mult * reassign_ac["Flights_perYear"]/op_hrs_per_year
+            city_data.loc[reassign_itin_out["fuel_stop"], "Movts_perHr"] -= 4.0 * fuel_stop_movt_mult * reassign_ac["Flights_perYear"]/OP_HRS_PER_YEAR
         
         # adjust city_pair_data Exp_Utility_Sum
         city_pair_data.loc[
@@ -1091,8 +1086,8 @@ def reassign_ac_to_new_route(
         # adjust city_data movements
         origin_movt_mult = 1.0 + city_data.loc[new_origin, "Movts_Outside_Proportion"]
         destination_movt_mult = 1.0 + city_data.loc[new_destination, "Movts_Outside_Proportion"]
-        city_data.loc[new_origin, "Movts_perHr"] += 2.0 * origin_movt_mult * addnl_flights_per_year/op_hrs_per_year
-        city_data.loc[new_destination, "Movts_perHr"] += 2.0 * destination_movt_mult * addnl_flights_per_year/op_hrs_per_year
+        city_data.loc[new_origin, "Movts_perHr"] += 2.0 * origin_movt_mult * addnl_flights_per_year/OP_HRS_PER_YEAR
+        city_data.loc[new_destination, "Movts_perHr"] += 2.0 * destination_movt_mult * addnl_flights_per_year/OP_HRS_PER_YEAR
 
         # adjust city_pair_data Exp_Utility_Sum
         city_pair_data.loc[

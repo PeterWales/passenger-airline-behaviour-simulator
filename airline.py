@@ -7,6 +7,13 @@ import reassignment
 from skopt import gp_minimize
 import datetime
 import math
+from constants import (
+    MIN_INIT_PLANES_PER_AL,
+    MIN_PAX_LOAD_FACTOR,
+    OP_HRS_PER_YEAR,
+    MAX_EXPANSION_PLANES,
+    MAX_EXPANSION_PROPORTION,
+)
 import warnings
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point*", category=UserWarning)
@@ -107,9 +114,9 @@ def initialise_airlines(
             if regions is not None and country["Region"] not in regions:
                 # no need to create multiple airlines for a country that won't be simulated
                 n_airlines = 1
-            elif sum(country_aircraft)/run_parameters["AirlinesPerCountry"] < 10:
+            elif sum(country_aircraft)/run_parameters["AirlinesPerCountry"] < MIN_INIT_PLANES_PER_AL:
                 # prevent small countries from having lots of tiny airlines
-                n_airlines = max(sum(country_aircraft) // 10, 1)
+                n_airlines = max(sum(country_aircraft) // MIN_INIT_PLANES_PER_AL, 1)
             else:
                 n_airlines = run_parameters["AirlinesPerCountry"]
             for country_airline_idx in range(n_airlines):
@@ -195,8 +202,6 @@ def initialise_fleet_assignment(
     """
     # TODO: enable EU airlines to operate routes between all EU countries
     # TODO: move aircraft creation and following lines into a function to avoid code duplication
-
-    min_load_factor = 0.8  # minimum load factor for an aircraft to be assigned to a route
 
     n_airlines = len(airlines)
 
@@ -305,7 +310,7 @@ def initialise_fleet_assignment(
             seats = total_seats * (route_RPKs / possible_RPKs)
 
             for aircraft_size, aircraft in aircraft_data.iterrows():
-                if seats <= (smallest_ac * min_load_factor):
+                if seats <= (smallest_ac * MIN_PAX_LOAD_FACTOR):
                     break
                 if aircraft_avail[aircraft_size] > 0:
                     # check origin and destination runways are long enough
@@ -318,7 +323,7 @@ def initialise_fleet_assignment(
                         # check aircraft has enough range
                         if distance < aircraft["TypicalRange_m"]:  # must be kept seperate due to else statement
                             while(
-                                (seats / aircraft["Seats"] > min_load_factor)
+                                (seats / aircraft["Seats"] > MIN_PAX_LOAD_FACTOR)
                                 and (aircraft_avail[aircraft_size] > 0)
                             ):
                                 seats -= aircraft["Seats"]  # can go negative
@@ -386,7 +391,7 @@ def initialise_fleet_assignment(
 
                             if not (fuel_stop == -1):  # -1 if route not possible with a stop for that aircraft
                                 while(
-                                    (seats / aircraft["Seats"] > min_load_factor)
+                                    (seats / aircraft["Seats"] > MIN_PAX_LOAD_FACTOR)
                                     and (aircraft_avail[aircraft_size] > 0)
                                 ):
                                     seats -= aircraft["Seats"]  # can go negative
@@ -495,8 +500,6 @@ def create_aircraft(
     capacity_flag_list: list,
     regions: list | None,
 ):
-    op_hrs_per_year = 6205.0  # =17*365 (assume airports are closed between 11pm and 6am)
-
     if fuel_stop == -1:
         fuel_stop_series = None
     else:
@@ -541,8 +544,8 @@ def create_aircraft(
         fuel_stop_list.append(fuel_stop)
 
         # add movements to cities and flag if capacity limit exceeded
-        city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
-        city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / op_hrs_per_year
+        city_data.loc[origin_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / OP_HRS_PER_YEAR  # 2* since each flight is return
+        city_data.loc[destination_id, "Movts_perHr"] += 2.0 * float(flights_per_year) / OP_HRS_PER_YEAR
         
         if (
             (city_data.loc[origin_id, "Movts_perHr"] > city_data.loc[origin_id, "Capacity_MovtsPerHr"])
@@ -556,7 +559,7 @@ def create_aircraft(
             capacity_flag_list.append(destination_id)
 
         if fuel_stop != -1:
-            city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+            city_data.loc[fuel_stop, "Movts_perHr"] += 4.0 * float(flights_per_year) / OP_HRS_PER_YEAR  # 4* since 1 takeoff and 1 landing for each leg
             if (
                 (city_data.loc[fuel_stop, "Movts_perHr"] > city_data.loc[fuel_stop, "Capacity_MovtsPerHr"])
                 and (fuel_stop not in capacity_flag_list)
@@ -638,7 +641,7 @@ def create_aircraft(
 
         # add movements to cities and flag if capacity limit exceeded
         if city_data.loc[origin_id, "Region"] in regions:
-            movts = 2.0 * float(flights_per_year) / op_hrs_per_year  # 2* since each flight is return
+            movts = 2.0 * float(flights_per_year) / OP_HRS_PER_YEAR  # 2* since each flight is return
             city_data.loc[origin_id, "Movts_perHr"] += movts
             city_data.loc[origin_id, "Movts_Outside"] += movts
             if (
@@ -648,7 +651,7 @@ def create_aircraft(
                 capacity_flag_list.append(origin_id)
 
         if city_data.loc[destination_id, "Region"] in regions:
-            movts = 2.0 * float(flights_per_year) / op_hrs_per_year
+            movts = 2.0 * float(flights_per_year) / OP_HRS_PER_YEAR
             city_data.loc[destination_id, "Movts_perHr"] += movts
             city_data.loc[destination_id, "Movts_Outside"] += movts
             if (
@@ -659,7 +662,7 @@ def create_aircraft(
         
         if fuel_stop != -1:
             if fuel_stop_series["Region"] in regions:
-                movts = 4.0 * float(flights_per_year) / op_hrs_per_year  # 4* since 1 takeoff and 1 landing for each leg
+                movts = 4.0 * float(flights_per_year) / OP_HRS_PER_YEAR  # 4* since 1 takeoff and 1 landing for each leg
                 city_data.loc[fuel_stop, "Movts_perHr"] += movts
                 city_data.loc[fuel_stop, "Movts_Outside"] += movts
                 if (
@@ -1004,8 +1007,6 @@ def reassign_ac_for_profit(
     #       - check each size class seperately
     #       - consider moving aircraft to routes with fuel stops
 
-    op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
-
     print(f"        Reassigning aircraft...")
     print("        Time: ", datetime.datetime.now(), "\n")
     # iterate over all airlines
@@ -1076,7 +1077,6 @@ def reassign_ac_for_profit(
                 airline_fleets[airline_id],
                 aircraft_data,
                 reassign_ac,
-                op_hrs_per_year,
                 demand_coefficients,
                 FuelCost_USDperGallon,
                 reassign_new_profit_per_seat,
@@ -1120,7 +1120,6 @@ def reassign_ac_for_profit(
                     airline_fleets,
                     aircraft_data,
                     demand_coefficients,
-                    op_hrs_per_year,
                 )
 
                 # update masks because an itinerary may have been added to airline_routes
@@ -1259,7 +1258,6 @@ def reassign_ac_for_profit(
                     airline_fleets,
                     aircraft_data,
                     demand_coefficients,
-                    op_hrs_per_year,
                 )
 
                 # update masks because an itinerary may have been removed from airline_routes
@@ -1340,7 +1338,6 @@ def reassign_ac_for_profit(
                     airline_fleets[airline_id],
                     aircraft_data,
                     reassign_ac,
-                    op_hrs_per_year,
                     demand_coefficients,
                     FuelCost_USDperGallon,
                     reassign_new_profit_per_seat,
@@ -1377,7 +1374,6 @@ def reassign_ac_for_profit(
                         airline_fleets,
                         aircraft_data,
                         demand_coefficients,
-                        op_hrs_per_year,
                     )
 
                 else:
@@ -1403,7 +1399,7 @@ def reassign_ac_for_profit(
                 aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
                 n_aircraft_sum = airlines.loc[airline_id, "n_Aircraft"].sum()
-                max_expansion = min(20, math.floor(n_aircraft_sum * 0.2))  # max 20 new aircraft or 20% of fleet size, whichever is smaller
+                max_expansion = min(MAX_EXPANSION_PLANES, math.floor(n_aircraft_sum * MAX_EXPANSION_PROPORTION))  # max no. a/c or % of fleet size, whichever is smaller
                 n_new_aircraft = 0
 
                 for aircraft_size, aircraft in aircraft_data.iterrows():
@@ -1452,7 +1448,6 @@ def reassign_ac_for_profit(
                             airline_fleets[airline_id],
                             aircraft_data,
                             reassign_ac,
-                            op_hrs_per_year,
                             demand_coefficients,
                             FuelCost_USDperGallon,
                             reassign_new_profit_per_seat,
@@ -1489,7 +1484,6 @@ def reassign_ac_for_profit(
                                 airline_fleets,
                                 aircraft_data,
                                 demand_coefficients,
-                                op_hrs_per_year,
                             )
 
                             # add aircraft to airline["n_Aircraft"]

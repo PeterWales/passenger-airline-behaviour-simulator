@@ -6,6 +6,7 @@ import route
 import os
 import pickle
 import datetime
+from constants import FARE_CONVERGENCE_TOLERANCE
 
 
 def simulate_base_year(
@@ -25,9 +26,6 @@ def simulate_base_year(
 ) -> tuple[list[pd.DataFrame], pd.DataFrame]:
     print(f"    Simulating base year ({year})...")
     print("    Time: ", datetime.datetime.now(), "\n")
-
-    # parameters for finding Nash equilibrium
-    demand_tolerance = 1000.0
 
     # initialise dataframes tracking convergence
     fare_iters = pd.DataFrame()
@@ -74,13 +72,13 @@ def simulate_base_year(
 
         # check convergence
         if iteration > 0:
-            diff = abs(demand_iters[f"iter{iteration}"] - demand_iters[f"iter{iteration-1}"])
+            diff = abs(fare_iters[f"iter{iteration}"] - fare_iters[f"iter{iteration-1}"])
             max_diff = diff.max()
             mean_diff = diff.mean()
-            print(f"        Maximum demand shift: {max_diff}")
-            print(f"        Mean demand shift: {mean_diff}")
+            print(f"        Maximum fare shift: {max_diff} USD")
+            print(f"        Mean fare shift: {mean_diff} USD")
             
-            if max_diff < demand_tolerance:
+            if max_diff < FARE_CONVERGENCE_TOLERANCE:
                 print(f"        Converged after {iteration} iterations")
                 break
     
@@ -191,6 +189,7 @@ def run_simulation(
             airport_expansion_data,
             year,
         )
+        # city_pair_data must be updated after city_data because it needs new values from city_data
         city_pair_data = route.annual_update(
             city_pair_data,
             city_data,

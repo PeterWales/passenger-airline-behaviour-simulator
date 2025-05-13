@@ -1,6 +1,11 @@
 import numpy as np
 import pandas as pd
 from pygeodesy import sphericalNvector as snv
+from constants import (
+    PRICE_ELAS_LH_THRESHOLD,
+    INCOME_ELAS_THRESHOLDS,
+    GNI_THRESHOLDS,
+)
 
 
 def initialise_routes(
@@ -25,22 +30,6 @@ def initialise_routes(
     -------
     city_pair_data : pd.DataFrame
     """
-    # arbitrary thresholds for flight types in meters
-    price_elas_LH_threshold = 3000 * 1609.344
-    income_elas_thresholds = {
-        "short": 0.0,
-        "medium": 1000*1609.344,
-        "long": 3000*1609.344,
-        "ultra_long": 5000*1609.344
-    }
-
-    # World Bank GNI thresholds for country income levels
-    GNI_thresholds = {
-        "lower_middle": 1166,
-        "upper_middle": 4526,
-        "high": 14005
-    }
-
     # initialise whole columns
     city_pair_data["Mean_Fare_USD"] = city_pair_data["Fare_Est"]
     city_pair_data["Total_Demand"] = city_pair_data["BaseYearODDemandPax_Est"]
@@ -101,7 +90,7 @@ def initialise_routes(
                 (price_elasticities["OD_1"] == min(origin["Region"], destination["Region"]))
                 & (price_elasticities["OD_2"] == max(origin["Region"], destination["Region"]))
             ].index[0]
-            if (distance[idx] < price_elas_LH_threshold):
+            if (distance[idx] < PRICE_ELAS_LH_THRESHOLD):
                 haul = "SH"
             else:
                 haul = "LH"
@@ -112,8 +101,6 @@ def initialise_routes(
             origin_income_elasticity[idx], destination_income_elasticity[idx] = route_income_elasticity(
                 income_elasticities,
                 distance[idx],
-                income_elas_thresholds,
-                GNI_thresholds,
                 origin["Country"],
                 destination["Country"],
                 origin["Income_USDpercap"],
@@ -184,8 +171,6 @@ def calc_great_circle_distance(origin_lat, origin_long, destination_lat, destina
 def route_income_elasticity(
         income_elasticities: pd.DataFrame,
         distance: float,
-        income_elas_thresholds: dict,
-        GNI_thresholds: dict,
         origin_country_code: int,
         destination_country_code: int,
         origin_income_USDpercap: float,
@@ -198,8 +183,6 @@ def route_income_elasticity(
     ----------
     income_elasticities : pd.DataFrame
     distance : float
-    income_elas_thresholds : dict
-    GNI_thresholds : dict
     country_code : int
     origin_income_USDpercap : float
     destination_income_USDpercap : float
@@ -209,11 +192,11 @@ def route_income_elasticity(
     origin_income_elasticity : float
     destination_income_elasticity : float
     """
-    if distance < income_elas_thresholds["medium"]:
+    if distance < INCOME_ELAS_THRESHOLDS["medium"]:
         haul = "SH"
-    elif distance < income_elas_thresholds["long"]:
+    elif distance < INCOME_ELAS_THRESHOLDS["long"]:
         haul = "MH"
-    elif distance < income_elas_thresholds["ultra_long"]:
+    elif distance < INCOME_ELAS_THRESHOLDS["ultra_long"]:
         haul = "LH"
     else:
         haul = "ULH"
@@ -221,14 +204,12 @@ def route_income_elasticity(
     origin_income_elasticity = city_income_elasticity(
         income_elasticities,
         haul,
-        GNI_thresholds,
         origin_country_code,
         origin_income_USDpercap,
     )
     destination_income_elasticity = city_income_elasticity(
         income_elasticities,
         haul,
-        GNI_thresholds,
         destination_country_code,
         destination_income_USDpercap,
     )
@@ -239,7 +220,6 @@ def route_income_elasticity(
 def city_income_elasticity(
     income_elasticities: pd.DataFrame,
     haul: str,
-    GNI_thresholds: dict,
     country_code: int,
     income_USDpercap: float,
 ) -> float:
@@ -251,7 +231,6 @@ def city_income_elasticity(
     ----------
     income_elasticities : pd.DataFrame
     haul : str
-    GNI_thresholds : dict
     country_code : int
     income_USDpercap : float
 
@@ -261,15 +240,15 @@ def city_income_elasticity(
     """
     # TODO: determine U.S. country code programmatically
 
-    if country_code == 204:  # U.S. country code
+    if country_code == 204:  # U.S. country code (after subtracting 100 from input file country code)
         income_elasticity = income_elasticities.loc[
             income_elasticities["CountryType"] == "US", f"elasticity_{haul}"
         ].iloc[0]
-    elif income_USDpercap < GNI_thresholds["lower_middle"]:
+    elif income_USDpercap < GNI_THRESHOLDS["lower_middle"]:
         income_elasticity = income_elasticities.loc[
             income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
         ].iloc[0]
-    elif income_USDpercap < GNI_thresholds["high"]:
+    elif income_USDpercap < GNI_THRESHOLDS["high"]:
         # linearly interpolate between developing and developed country elasticities
         gradient = (
             income_elasticities.loc[
@@ -280,10 +259,10 @@ def city_income_elasticity(
                 income_elasticities["CountryType"] == "Developing",
                 f"elasticity_{haul}",
             ].iloc[0]
-        ) / (GNI_thresholds["high"] - GNI_thresholds["lower_middle"])
+        ) / (GNI_THRESHOLDS["high"] - GNI_THRESHOLDS["lower_middle"])
         income_elasticity = income_elasticities.loc[
             income_elasticities["CountryType"] == "Developing", f"elasticity_{haul}"
-        ].iloc[0] + gradient * (income_USDpercap - GNI_thresholds["lower_middle"])
+        ].iloc[0] + gradient * (income_USDpercap - GNI_THRESHOLDS["lower_middle"])
     else:
         income_elasticity = income_elasticities.loc[
             income_elasticities["CountryType"] == "Developed", f"elasticity_{haul}"

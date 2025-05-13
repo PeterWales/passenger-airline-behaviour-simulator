@@ -2,10 +2,10 @@ import pandas as pd
 from operator import add
 import math
 import numpy as np
-import airline as al
 import demand as demand
 import aircraft as acft
 import reassignment
+from constants import OP_HRS_PER_YEAR
 
 
 def set_base_values(
@@ -295,8 +295,6 @@ def enforce_capacity(
     #       - use reassignment.best_itin_alternative() to improve choice of itin to move reassigned aircraft to
     #       - recalculate profits for all airlines after reassignment, not just for airline which moves aircraft
 
-    op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
-
     # iterate through all cities where total airport capacity is exceeded
     for city_id in capacity_flag_list:
         # iterate through all airlines
@@ -394,8 +392,8 @@ def enforce_capacity(
                         origin_movt_mult = 1.0 + city_data.loc[new_origin, "Movts_Outside_Proportion"]
                         destination_movt_mult = 1.0 + city_data.loc[new_destination, "Movts_Outside_Proportion"]
                         if (
-                            city_data.loc[new_origin, "Movts_perHr"] + (2*origin_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[new_origin, "Capacity_MovtsPerHr"]
-                            and city_data.loc[new_destination, "Movts_perHr"] + (2*destination_movt_mult*flights_per_year/op_hrs_per_year) <= city_data.loc[new_destination, "Capacity_MovtsPerHr"]
+                            city_data.loc[new_origin, "Movts_perHr"] + (2*origin_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[new_origin, "Capacity_MovtsPerHr"]
+                            and city_data.loc[new_destination, "Movts_perHr"] + (2*destination_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[new_destination, "Capacity_MovtsPerHr"]
                         ):
                             # new itinerary is possible
                             addnl_seat_flights_per_year = flights_per_year * aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]
@@ -434,7 +432,6 @@ def enforce_capacity(
                 airline_fleets,
                 aircraft_data,
                 demand_coefficients,
-                op_hrs_per_year,
             )
 
             # split airline's itineraries out of potential_reassign
@@ -516,8 +513,6 @@ def annual_update(
     airport_expansion_data: pd.DataFrame,
     year_entering: int,
 ):
-    op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
-
     for _, country in country_data.iterrows():
         country_pop = population_data[population_data["Number"] == country["Number"]]
         country_inc = income_data[income_data["Number"] == country["Number"]]
@@ -534,6 +529,6 @@ def annual_update(
         for _, row in airport_expansion_data.iterrows():
             if row["ExpansionYear"] == year_entering:
                 city_id = row["CityID"]
-                city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"] // op_hrs_per_year
+                city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"] // OP_HRS_PER_YEAR
 
     return city_data
