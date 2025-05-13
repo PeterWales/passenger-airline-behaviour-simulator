@@ -6,6 +6,7 @@ import demand
 import reassignment
 from skopt import gp_minimize
 import datetime
+import math
 import warnings
 
 warnings.filterwarnings("ignore", message="The objective has been evaluated at point*", category=UserWarning)
@@ -1400,9 +1401,18 @@ def reassign_ac_for_profit(
             else:
                 # allow airline to lease new aircraft, starting with longest range aircraft type first
                 aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
+
+                n_aircraft_sum = airlines.loc[airline_id, "n_Aircraft"].sum()
+                max_expansion = min(20, math.floor(n_aircraft_sum * 0.2))  # max 20 new aircraft or 20% of fleet size, whichever is smaller
+                n_new_aircraft = 0
+
                 for aircraft_size, aircraft in aircraft_data.iterrows():
+                    if n_new_aircraft >= max_expansion:
+                        break
                     finished = False
                     while not finished:
+                        if n_new_aircraft >= max_expansion:
+                            break
                         # create new aircraft, add to airline_fleets and airline's grounded aircraft
                         if len(airline_fleets[airline_id]) == 0:
                             new_ac_id = 0
@@ -1484,6 +1494,8 @@ def reassign_ac_for_profit(
 
                             # add aircraft to airline["n_Aircraft"]
                             airlines.loc[airline_id, "n_Aircraft"][aircraft_size] += 1
+
+                            n_new_aircraft += 1
                         else:
                             # no profitable routes available
                             finished = True
