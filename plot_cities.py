@@ -11,6 +11,10 @@ def plot_city_data(
     output_folder_path: str,
 ) -> int:
     cities = pd.read_csv(os.path.join(load_folder_path, f"city_data_{start_year}.csv"))
+    
+    cities = cities.sort_values(by="Movts_perHr", ascending=False)
+    cities = cities.head(15)
+    cityIDs_to_plot = cities["CityID"].tolist()
 
     city_movements = {
         f"{city_name}": np.zeros(end_year - start_year + 1) for city_name in cities["CityName"]
@@ -20,6 +24,7 @@ def plot_city_data(
 
     for i in range(len(year_range)):
         cities = pd.read_csv(os.path.join(load_folder_path, f"city_data_{year_range[i]}.csv"))
+        cities = cities[cities["CityID"].isin(cityIDs_to_plot)]
 
         for _, city in cities.iterrows():
             city_movements[city["CityName"]][i] = city["Movts_perHr"]
