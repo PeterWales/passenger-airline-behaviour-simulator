@@ -280,14 +280,16 @@ def calc_fuel_cost(
     # calculate fuel consumption
     fuel_consumption_kg = takeoff_weight_kg - landing_weight_kg
 
-    if (
-        fuel_consumption_kg > aircraft_type["MaxFuel_kg"]
-        or takeoff_weight_kg > aircraft_type["MTOM_kg"]
-    ):
-        fuel_cost_USDperflt = -1  # flag as infeasible
-    else:
-        # 1kg jet fuel = 1.244L, 1L = 0.264 US Gallons, fuel price in USD/gallon
-        fuel_cost_USDperflt = fuel_consumption_kg * 1.244 * 0.264 * FuelCost_USDperGallon
+    aircraft_type_id = aircraft_type.name
+    if fuel_consumption_kg > aircraft_type["MaxFuel_kg"]:
+        print("WARNING [calc_fuel_cost]: fuel consumption exceeds max fuel capacity")
+        print(f"Itinerary from {city_pair['OriginCityID']} to {city_pair['DestinationCityID']} with aircraft type {aircraft_type_id}")
+    if takeoff_weight_kg > aircraft_type["MTOM_kg"]:
+        print("WARNING [calc_fuel_cost]: required take-off mass exceeds MTOM")
+        print(f"Itinerary from {city_pair['OriginCityID']} to {city_pair['DestinationCityID']} with aircraft type {aircraft_type_id}")
+    # 1kg jet fuel = 1.244L, 1L = 0.264 US Gallons, fuel price in USD/gallon
+    fuel_cost_USDperflt = fuel_consumption_kg * 1.244 * 0.264 * FuelCost_USDperGallon
+    
     return fuel_cost_USDperflt
 
 
