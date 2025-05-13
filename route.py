@@ -404,7 +404,7 @@ def choose_fuel_stop(
     midpoint = origin_coords.midpointTo(destination_coords)
 
     # find the nearest city with a hub to the midpoint that has a long enough runway
-    hub_city_data = city_data[city_data["HubStatus"] == 1]
+    hub_city_data = city_data[city_data["GlobalHub"] == 1]
     fuel_stop = -1
     min_distance = np.inf
     for city_id, city in hub_city_data.iterrows():
@@ -424,7 +424,7 @@ def choose_fuel_stop(
         )
     if fuel_stop == -1:
         # no suitable hub city found, so try again with non-hub cities
-        non_hub_city_data = city_data[city_data["HubStatus"] == 0]
+        non_hub_city_data = city_data[city_data["GlobalHub"] == 0]
         for city_id, city in non_hub_city_data.iterrows():
             fuel_stop, min_distance = test_fuel_stop(
                 fuel_stop,

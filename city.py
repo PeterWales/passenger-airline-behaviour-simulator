@@ -104,7 +104,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     taxi_in_mins = []
     capacity_perhr = []
     longest_runway_m = []
-    hub_status_list = []
 
     # loop over rows of city_data
     for idx, city in city_data.iterrows():
@@ -119,7 +118,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
         intnl_fee_mov_sum = [0.0] * n_aircraft
         taxi_out_sum = 0.0
         taxi_in_sum = 0.0
-        hub_status = False
         airport_column = 1
         long_flag = False
         while f"Airport_{airport_column}" in city.index:
@@ -136,9 +134,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                     longest_runway_found,
                     float(airport["LongestRunway_m"]),
                 )
-
-                if airport["HubStatus"] == 1:
-                    hub_status = True
 
                 lat_sum += float(airport["Latitude"]) * float(
                     airport["Capacity_movts_hr"]
@@ -234,7 +229,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
         taxi_in_mins.append(taxi_in_sum / capacity_sum)
         capacity_perhr.append(capacity_sum)
         longest_runway_m.append(longest_runway_found)
-        hub_status_list.append(hub_status)
 
     # add new columns to city_data
     city_data["Population"] = city_data["BaseYearPopulation"]
@@ -252,7 +246,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     city_data["Movts_Outside"] = np.zeros(len(city_data))  # number of momements associated with routes that are not fully contained within geographical scope
     city_data["Movts_Outside_Proportion"] = np.zeros(len(city_data))  # city_data["mvmts_outside"] as a proportion of total movements for that city
     city_data["LongestRunway_m"] = longest_runway_m
-    city_data["HubStatus"] = hub_status_list
 
     return city_data, city_lookup
 
