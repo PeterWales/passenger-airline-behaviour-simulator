@@ -156,7 +156,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
                 dom_fee_pax_sum += float(
                     airport["LandingCosts_PerPax_Domestic_2015USdollars"]
-                )
+                ) * float(airport["Capacity_movts_hr"])
                 dom_fee_mov_sum = list(
                     map(
                         add,
@@ -166,7 +166,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                                 airport[
                                     f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"
                                 ]
-                            )
+                            ) * float(airport["Capacity_movts_hr"])
                             for ac in range(n_aircraft)
                         ],
                     )
@@ -176,7 +176,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                     airport[
                         "LandingCosts_PerPax_International_2015USdollars"
                     ]
-                )
+                ) * float(airport["Capacity_movts_hr"])
                 intnl_fee_mov_sum = list(
                     map(
                         add,
@@ -186,7 +186,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                                 airport[
                                     f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"
                                 ]
-                            )
+                            ) * float(airport["Capacity_movts_hr"])
                             for ac in range(n_aircraft)
                         ],
                     )
@@ -194,10 +194,10 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
                 taxi_out_sum += float(
                     airport["UnimpTaxiOut_min"]
-                )
+                ) * float(airport["Capacity_movts_hr"])
                 taxi_in_sum += float(
                     airport["UnimpTaxiIn_min"]
-                )
+                ) * float(airport["Capacity_movts_hr"])
             else:
                 # airport_id == 0 => there are no more airports for that city
                 break
