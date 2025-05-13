@@ -516,6 +516,8 @@ def annual_update(
     airport_expansion_data: pd.DataFrame,
     year_entering: int,
 ):
+    op_hrs_per_year = 6205.0  # airport op hours per year = 17*365 (assume airports are closed between 11pm and 6am)
+
     for _, country in country_data.iterrows():
         country_pop = population_data[population_data["Number"] == country["Number"]]
         country_inc = income_data[income_data["Number"] == country["Number"]]
@@ -532,6 +534,6 @@ def annual_update(
         for _, row in airport_expansion_data.iterrows():
             if row["ExpansionYear"] == year_entering:
                 city_id = row["CityID"]
-                city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"]
+                city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"] // op_hrs_per_year
 
     return city_data
