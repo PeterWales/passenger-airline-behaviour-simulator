@@ -2,7 +2,7 @@
 # Tunable constants
 # -----------------
 FARE_CONVERGENCE_TOLERANCE = 10.0  # initial fare optimisation is converged once all mean fares shift by less than this amount (USD)
-MAX_RANGE_PAYLOAD_PROPORTION = 0.8  # proportion of max payload used for calculating representative ranges
+MAX_RANGE_PAYLOAD_PROPORTION = 0.8  # proportion of max payload used for calculating representative ranges (used for wide-body a/c only, fixed to 1.0 for narrow-body a/c)
 MIN_PAX_LOAD_FACTOR = 0.8  # minimum load factor (expected tickets sold / available seats) for a route to be considered viable
 LOITER_T_SEC = 1800  # 30 minutes in seconds
 DIVERSION_DIST_METRES = 185200  # 100 nautical miles in metres

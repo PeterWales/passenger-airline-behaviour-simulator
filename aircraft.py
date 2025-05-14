@@ -17,9 +17,13 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
 
     ranges = []
     for _, aircraft in aircraft_data.iterrows():
+        if aircraft["NarrowWideHeavy"] == 0:
+            payload_proportion = 1.0  # since narrow body jets don't carry a significant non-passenger payload
+        else:
+            payload_proportion = MAX_RANGE_PAYLOAD_PROPORTION
         # calculate landing weight
         landing_weight_kg = (
-            aircraft["OEM_kg"] + MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"]
+            aircraft["OEM_kg"] + payload_proportion * aircraft["MaxPayload_kg"]
         )
 
         # calculate weight before loiter using Breguet range equation
@@ -38,13 +42,13 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
             DIVERSION_DIST_METRES / breguet_factor
         )
 
-        # calculate take-off weight (max fuel + 80% payload doesn't necessarily reach MTOM)
+        # calculate take-off weight (max fuel + prescribed payload doesn't necessarily reach MTOM)
         takeoff_weight_kg = min(
             [
                 aircraft["MTOM_kg"],
                 aircraft["OEM_kg"]
                 + aircraft["MaxFuel_kg"]
-                + (MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"])
+                + (payload_proportion * aircraft["MaxPayload_kg"])
             ]
         )
 
