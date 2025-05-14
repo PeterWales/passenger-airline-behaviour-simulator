@@ -532,7 +532,7 @@ def annual_update(
     ):
         for _, row in airport_expansion_data.iterrows():
             if row["ExpansionYear"] == year_entering:
-                print(f"    Adding {row["AdditionalFlightsPerYear"]} flights per year to city: {row["CityName"]}")
+                print(f"    Adding {row['AdditionalFlightsPerYear']} flights per year to city: {row['CityName']}")
                 city_id = row["CityID"]
                 city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"] // OP_HRS_PER_YEAR
 
