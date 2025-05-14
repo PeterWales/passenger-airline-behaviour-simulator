@@ -1398,7 +1398,7 @@ def reassign_ac_for_profit(
                 # allow airline to lease new aircraft, starting with longest range aircraft type first
                 aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
-                n_aircraft_sum = airlines.loc[airline_id, "n_Aircraft"].sum()
+                n_aircraft_sum = sum(airlines.loc[airline_id, "n_Aircraft"])
                 max_expansion = min(MAX_EXPANSION_PLANES, math.floor(n_aircraft_sum * MAX_EXPANSION_PROPORTION))  # max no. a/c or % of fleet size, whichever is smaller
                 n_new_aircraft = 0
 
