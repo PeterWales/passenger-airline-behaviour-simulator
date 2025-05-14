@@ -1510,7 +1510,7 @@ def update_itinerary_times(
     aircraft_data: pd.DataFrame,
     airline_fleets: list[pd.DataFrame],
 ) -> list[pd.DataFrame]:
-    for airline_id, airline in airlines.iterrows():
+    for airline_id, _ in airlines.iterrows():
         for idx, itin in airline_routes[airline_id].iterrows():
             # remove itinerary if no aircraft assigned and warn because this should have been dealt with elsewhere
             if itin["aircraft_ids"] == []:

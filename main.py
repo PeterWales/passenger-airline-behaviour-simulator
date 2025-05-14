@@ -63,10 +63,12 @@ def main():
     population_data = pd.read_csv(os.path.join(data_path, "PopulationProjections.csv"))
     price_elasticities = pd.read_csv(os.path.join(data_path, "PriceElasticities.csv"))
     income_elasticities = pd.read_csv(os.path.join(data_path, "IncomeElasticities.csv"))
-    fuel_data = pd.read_csv(os.path.join(data_path, "FuelProjection.csv"))
+    conv_fuel_data = pd.read_csv(os.path.join(data_path, "FuelProjection.csv"))
     with open(os.path.join(data_path, "DemandCoefficients.csv"), "r", encoding='utf-8-sig') as f:
         demand_coefficients = dict(zip(f.readline().strip().split(","), map(float, f.readline().strip().split(","))))
     airport_expansion_data = pd.read_csv(os.path.join(data_path, "AirportExpansion.csv"))
+    saf_mandate_data = pd.read_csv(os.path.join(data_path, "SAFMandate.csv"))
+    saf_pathway_data = pd.read_csv(os.path.join(data_path, "SAFPathways.csv"))
     fleet_data = pd.read_csv(
         os.path.join(data_path, "FleetDataPassenger.csv")
     )  # note cargo aircraft are in a seperate file
@@ -223,9 +225,10 @@ def main():
             print("    Checking airport capacity limits...")
             if len(capacity_flag_list) > 0:
                 print(f"        Limits exceeded for {len(capacity_flag_list)} city/cities. Reassigning fleets...")
-                FuelCost_USDperGallon = fuel_data.loc[
-                    fuel_data["Year"] == run_parameters["StartYear"], "Price_USD_per_Gallon"
+                CJFCost_USDperGallon = conv_fuel_data.loc[
+                    conv_fuel_data["Year"] == run_parameters["StartYear"], "Price_USD_per_Gallon"
                 ].values[0]
+                # neglect SAF cost for this
                 (
                     airline_fleets,
                     airline_routes,
@@ -242,7 +245,7 @@ def main():
                     city_lookup,
                     capacity_flag_list,
                     demand_coefficients,
-                    FuelCost_USDperGallon,
+                    CJFCost_USDperGallon,
                 )
             else:
                 print("    No capacity limits exceeded.")
@@ -309,10 +312,12 @@ def main():
         run_parameters["PopulationElasticity"],
         population_data,
         income_data,
-        fuel_data,
+        conv_fuel_data,
         save_folder_path,
         cache_folder_path,
         airport_expansion_data,
+        saf_mandate_data,
+        saf_pathway_data,
         run_parameters,
     )
 
