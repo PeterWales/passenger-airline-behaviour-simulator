@@ -37,7 +37,7 @@ def simulate_base_year(
     print(f"    Simulating base year ({year})...")
     print("    Time: ", datetime.datetime.now(), "\n")
 
-    total_fuel_kg, city_pair_data = update_fuel_and_sales(
+    total_fuel_kg, city_pair_data, airline_routes = update_fuel_and_sales(
         airlines,
         airline_routes,
         airline_fleets,
@@ -117,7 +117,7 @@ def simulate_base_year(
         )
 
         # calculate fuel usage
-        total_fuel_kg, city_pair_data = update_fuel_and_sales(
+        total_fuel_kg, city_pair_data, airline_routes = update_fuel_and_sales(
             airlines,
             airline_routes,
             airline_fleets,
@@ -352,7 +352,7 @@ def run_simulation(
         )
 
         # calculate fuel usage
-        total_fuel_kg, city_pair_data = update_fuel_and_sales(
+        total_fuel_kg, city_pair_data, airline_routes = update_fuel_and_sales(
             airlines,
             airline_routes,
             airline_fleets,
@@ -467,10 +467,10 @@ def update_fuel_and_sales(
     airline_fleets: list[pd.DataFrame],
     city_pair_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
-):
+) -> tuple[float, pd.DataFrame, list[pd.DataFrame]]:
     """
     Calculate the total fuel consumption for the simulation and update the "Fuel_Consumption_kg" column in the city_pair_data DataFrame.
-    Also updates the "Tickets_Sold" column in the airline_routes DataFrame.
+    Also updates the "Tickets_Sold" column in the airline_routes and city_pair_data DataFrames.
 
     Parameters
     ----------
@@ -494,9 +494,11 @@ def update_fuel_and_sales(
     total_fuel_kg = 0.0
     city_pair_data["Fuel_Consumption_kg"] = 0.0
 
+    city_pair_data["Tickets_Sold"] = 0
+
     # iterate over all airlines
     for airline_id, _ in airlines.iterrows():
-        airline_routes[airline_id]["Tickets_Sold"] = 0.0
+        airline_routes[airline_id]["Tickets_Sold"] = 0
         # iterate over all itineraries for the airline
         for al_route_idx, airline_route in airline_routes[airline_id].iterrows():
             city_pair_idx = city_pair_data.index[
@@ -511,6 +513,7 @@ def update_fuel_and_sales(
             tickets_sold = max([0, tickets_sold])
 
             airline_routes[airline_id].at[al_route_idx, "Tickets_Sold"] = tickets_sold
+            city_pair_data.at[city_pair_idx, "Tickets_Sold"] += tickets_sold
 
             # calculate total seats for all aircraft on route
             planes = airline_route["aircraft_ids"]
@@ -542,7 +545,7 @@ def update_fuel_and_sales(
                 total_fuel_kg += fuel_per_year
                 city_pair_data.at[city_pair_idx, "Fuel_Consumption_kg"] += fuel_per_year
     
-    return total_fuel_kg, city_pair_data
+    return total_fuel_kg, city_pair_data, airline_routes
 
 
 def fuel_price_with_saf(
