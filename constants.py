@@ -25,6 +25,22 @@ GNI_THRESHOLDS = {
     "upper_middle": 4526,
     "high": 14005
 }  # World Bank GNI per capita thresholds for country income levels (USD)
+# AC_SIZE_EQUIVALENCE = {
+#     "size_0": [3,2,1],
+#     "size_1": [3,2,3],
+#     "size_2": [6,5,3],
+#     "size_4": [4,3,5],
+#     "size_5": [4,3,6],
+# }  # [number of size_a a/c to replace, number of larger a/c to add, size class of larger a/c]
+ROUTE_MAX_SINGLE_SZ = {
+    "size_0": 3,
+    "size_1": 3,
+    "size_2": -1,
+    "size_3": -1,
+    "size_4": 6,
+    "size_5": -1,
+    "size_6": -1,
+}  # use to force airlines to wait for demand to add larger a/c, rather than repeatedly adding smaller a/c (-1 => no limit)
 
 # ------------------
 # Physical constants

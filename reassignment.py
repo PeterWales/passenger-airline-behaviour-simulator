@@ -4,7 +4,10 @@ import copy
 import airline as al
 import aircraft as acft
 import demand
-from constants import OP_HRS_PER_YEAR
+from constants import (
+    OP_HRS_PER_YEAR,
+    ROUTE_MAX_SINGLE_SZ,
+)
 
 
 def calc_existing_profits(
@@ -415,6 +418,22 @@ def find_itin_alternative(
                         & (itineraries["fuel_stop"] == -1)
                     ].empty:
                         # airline already flies this route
+
+                        # check not exceeding max number of each aircraft size on this route
+                        reassign_ac_size = reassign_ac["SizeClass"]
+                        max_n_same_size = ROUTE_MAX_SINGLE_SZ[f"size_{reassign_ac_size}"]
+                        if max_n_same_size != -1:
+                            n_same_size = 1  # include the aircraft being reassigned
+                            for ac_id in itineraries.loc[
+                                (itineraries["origin"] == origin_id)
+                                & (itineraries["destination"] == destination_id)
+                                & (itineraries["fuel_stop"] == -1), "aircraft_ids"
+                            ].iloc[0]:
+                                if fleet_data.loc[fleet_data["AircraftID"] == ac_id, "SizeClass"].iloc[0] == reassign_ac_size:
+                                    n_same_size += 1
+                            if n_same_size > max_n_same_size:
+                                continue
+
                         # calculate old profit per seat of new route without new aircraft
                         out_itin_mask = (
                             (itineraries["origin"] == origin_id)
