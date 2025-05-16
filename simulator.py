@@ -3,10 +3,16 @@ import airline as al
 import aircraft
 import city
 import route
+import demand
 import os
 import pickle
 import datetime
-from constants import FARE_CONVERGENCE_TOLERANCE
+import math
+from constants import (
+    FARE_CONVERGENCE_TOLERANCE,
+    FUEL_ENERGY_MJ_KG,
+    FUEL_GALLONS_PER_KG,
+)
 
 
 def simulate_base_year(
@@ -17,15 +23,37 @@ def simulate_base_year(
     airline_fleets: list[pd.DataFrame],
     airline_routes: list[pd.DataFrame],
     aircraft_data: pd.DataFrame,
-    FuelCost_USDperGallon: float,
+    CJFCost_USDperGallon: float,
     save_folder_path: str,
     cache_folder_path: str,
     max_fare: float,
     iteration_limit: int,
     demand_coefficients: dict[str, float],
-) -> tuple[list[pd.DataFrame], pd.DataFrame]:
+    saf_mandate_data,
+    saf_pathway_data,
+    run_parameters: dict,
+) -> tuple[list[pd.DataFrame], pd.DataFrame, float]:
     print(f"    Simulating base year ({year})...")
     print("    Time: ", datetime.datetime.now(), "\n")
+
+    total_fuel_kg, city_pair_data = update_fuel_and_sales(
+        airlines,
+        airline_routes,
+        airline_fleets,
+        city_pair_data,
+        aircraft_data,
+    )
+
+    if run_parameters["RunSAFMandate"] == "y" or run_parameters["RunSAFMandate"] == "Y":
+        FuelCost_USDperGallon = fuel_price_with_saf(
+            CJFCost_USDperGallon,
+            saf_mandate_data,
+            saf_pathway_data,
+            year,
+            total_fuel_kg,
+        )
+    else:
+        FuelCost_USDperGallon = CJFCost_USDperGallon
 
     # initialise dataframes tracking convergence
     fare_iters = pd.DataFrame()
@@ -82,12 +110,25 @@ def simulate_base_year(
                 print(f"        Converged after {iteration} iterations")
                 break
     
+    fuel_data_out = pd.DataFrame(
+        {
+            "total_fuel_kg": [total_fuel_kg],
+            "CJFCost_USDperGallon": [CJFCost_USDperGallon],
+            "FuelCost_USDperGallon": [FuelCost_USDperGallon],
+        }
+    )
+    fuel_data_out.to_csv(
+        os.path.join(save_folder_path, f"fuel_data_{year}.csv"), index=False
+    )
+    
     # save pkl files
     with open(os.path.join(cache_folder_path, "airline_routes.pkl"), "wb") as f:
         pickle.dump(airline_routes, f)
     with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "wb") as f:
         pickle.dump(city_pair_data, f)
-    return airline_routes, city_pair_data
+    with open(os.path.join(cache_folder_path, "total_fuel_kg.pkl"), "wb") as f:
+        pickle.dump(total_fuel_kg, f)
+    return airline_routes, city_pair_data, total_fuel_kg
 
 
 def run_simulation(
@@ -103,10 +144,12 @@ def run_simulation(
     population_elasticity: float,
     population_data: pd.DataFrame,
     income_data: pd.DataFrame,
-    fuel_data: pd.DataFrame,
+    conv_fuel_data: pd.DataFrame,
     save_folder_path: str,
     cache_folder_path: str,
     airport_expansion_data: pd.DataFrame,
+    saf_mandate_data: pd.DataFrame,
+    saf_pathway_data: pd.DataFrame,
     run_parameters: dict,
 ):
     base_year = run_parameters["StartYear"]
@@ -115,8 +158,8 @@ def run_simulation(
     max_fare = run_parameters["MaxFare"]
     iteration_limit = run_parameters["BaseIterationLimit"]
 
-    FuelCost_USDperGallon = fuel_data.loc[
-        fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
+    CJFCost_USDperGallon = conv_fuel_data.loc[
+        conv_fuel_data["Year"] == base_year, "Price_USD_per_Gallon"
     ].values[0]
     
     if run_parameters["ContinueExistingSim"] == "n" or run_parameters["ContinueExistingSim"] == "N":
@@ -139,7 +182,7 @@ def run_simulation(
             run_parameters["RerunFareInit"] == "y"
             or run_parameters["RerunFareInit"] == "Y"
         ):
-            airline_routes, city_pair_data = simulate_base_year(
+            airline_routes, city_pair_data, total_fuel_kg = simulate_base_year(
                 base_year,
                 city_data,
                 city_pair_data,
@@ -147,22 +190,35 @@ def run_simulation(
                 airline_fleets,
                 airline_routes,
                 aircraft_data,
-                FuelCost_USDperGallon,
+                CJFCost_USDperGallon,
                 save_folder_path,
                 cache_folder_path,
                 max_fare,
                 iteration_limit,
                 demand_coefficients,
+                saf_mandate_data,
+                saf_pathway_data,
+                run_parameters,
             )
+        else:
+            with open(os.path.join(cache_folder_path, "total_fuel_kg.pkl"), "rb") as f:
+                total_fuel_kg = pickle.load(f)
 
         # write dataframes to files
         city_data.to_csv(os.path.join(save_folder_path, f"city_data_{base_year}.csv"), index=True)
         city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{base_year}.csv"), index=False)
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{base_year}.csv"), index=False)
+        # fuel_data_out saved inside simulate_base_year
     else:
         # load start year from cache
         with open(os.path.join(cache_folder_path, "intermediate", "year_completed.pkl"), "rb") as f:
             start_year = pickle.load(f)
+        if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
+            suffix = f"_{start_year}"
+        else:
+            suffix = ""
+        with open(os.path.join(cache_folder_path, "intermediate", f"total_fuel_kg{suffix}.pkl"), "rb") as f:
+            total_fuel_kg = pickle.load(f)
         start_year += 1
 
     # iterate over desired years
@@ -171,9 +227,21 @@ def run_simulation(
         print("    Time: ", datetime.datetime.now(), "\n")
 
         # update data for the new year
-        FuelCost_USDperGallon = fuel_data.loc[
-            fuel_data["Year"] == year, "Price_USD_per_Gallon"
+        CJFCost_USDperGallon = conv_fuel_data.loc[
+            conv_fuel_data["Year"] == year, "Price_USD_per_Gallon"
         ].values[0]
+
+        if run_parameters["RunSAFMandate"] == "y" or run_parameters["RunSAFMandate"] == "Y":
+            FuelCost_USDperGallon = fuel_price_with_saf(
+                CJFCost_USDperGallon,
+                saf_mandate_data,
+                saf_pathway_data,
+                year,
+                total_fuel_kg,
+            )
+        else:
+            FuelCost_USDperGallon = CJFCost_USDperGallon
+
         airline_fleets = aircraft.annual_update(
             airlines,
             airline_fleets,
@@ -188,6 +256,7 @@ def run_simulation(
             income_data,
             airport_expansion_data,
             year,
+            run_parameters,
         )
         # city_pair_data must be updated after city_data because it needs new values from city_data
         city_pair_data = route.annual_update(
@@ -231,10 +300,29 @@ def run_simulation(
             airline_fleets,
         )
 
+        # calculate fuel usage
+        total_fuel_kg, city_pair_data = update_fuel_and_sales(
+            airlines,
+            airline_routes,
+            airline_fleets,
+            city_pair_data,
+            aircraft_data,
+        )
+
         # write dataframes to files
         city_data.to_csv(os.path.join(save_folder_path, f"city_data_{year}.csv"), index=True)
         city_pair_data.to_csv(os.path.join(save_folder_path, f"city_pair_data_{year}.csv"), index=False)
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{year}.csv"), index=False)
+        fuel_data_out = pd.DataFrame(
+            {
+                "total_fuel_kg": [total_fuel_kg],
+                "CJFCost_USDperGallon": [CJFCost_USDperGallon],
+                "FuelCost_USDperGallon": [FuelCost_USDperGallon],
+            }
+        )
+        fuel_data_out.to_csv(
+            os.path.join(save_folder_path, f"fuel_data_{year}.csv"), index=False
+        )
 
         # save to pkl so simulation can be resumed if interrupted (overwrite at the end of each year unless running as baseline)
         if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
@@ -256,6 +344,8 @@ def run_simulation(
             pickle.dump(city_data, f)
         with open(os.path.join(annual_cache_path, f"city_pair_data{suffix}.pkl"), "wb") as f:
             pickle.dump(city_pair_data, f)
+        with open(os.path.join(annual_cache_path, f"total_fuel_kg{suffix}.pkl"), "wb") as f:
+            pickle.dump(total_fuel_kg, f)
         with open(os.path.join(annual_cache_path, "city_lookup.pkl"), "wb") as f:
             pickle.dump(city_lookup, f)
         with open(os.path.join(annual_cache_path, "country_data.pkl"), "wb") as f:
@@ -318,3 +408,187 @@ def limit_to_region(
     city_data = city_data.drop(columns=["Movts_Outside"])  # keep proportion only to avoid confusion
 
     return airlines, city_pair_data, city_data, country_data
+
+
+def update_fuel_and_sales(
+    airlines: pd.DataFrame,
+    airline_routes: list[pd.DataFrame],
+    airline_fleets: list[pd.DataFrame],
+    city_pair_data: pd.DataFrame,
+    aircraft_data: pd.DataFrame,
+):
+    """
+    Calculate the total fuel consumption for the simulation and update the "Fuel_Consumption_kg" column in the city_pair_data DataFrame.
+    Also updates the "Tickets_Sold" column in the airline_routes DataFrame.
+
+    Parameters
+    ----------
+    airlines : pd.DataFrame
+    airline_routes : list[pd.DataFrame]
+    airline_fleets : list[pd.DataFrame]
+    city_pair_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+
+    Returns
+    -------
+    total_fuel_kg : float
+        Total fuel consumption in kg for the simulation.
+    city_pair_data : pd.DataFrame
+        Updated city_pair_data DataFrame with the "Fuel_Consumption_kg" column.
+    """
+    print("        Calculating fuel usage...")
+    print("        Time: ", datetime.datetime.now(), "\n")
+    
+    # initialise fuel counting variables
+    total_fuel_kg = 0.0
+    city_pair_data["Fuel_Consumption_kg"] = 0.0
+
+    # iterate over all airlines
+    for airline_id, _ in airlines.iterrows():
+        airline_routes[airline_id]["Tickets_Sold"] = 0.0
+        # iterate over all itineraries for the airline
+        for al_route_idx, airline_route in airline_routes[airline_id].iterrows():
+            city_pair_idx = city_pair_data.index[
+                (city_pair_data["OriginCityID"] == airline_route["origin"])
+                & (city_pair_data["DestinationCityID"] == airline_route["destination"])
+            ].tolist()[0]
+            city_pair = city_pair_data.loc[city_pair_idx]
+
+            # calculate tickets sold (can't be more than the airline has scheduled or less than zero)
+            annual_itin_demand = demand.update_itinerary_demand(city_pair, airline_route)
+            tickets_sold = min([annual_itin_demand, airline_route["seat_flights_per_year"]])
+            tickets_sold = max([0, tickets_sold])
+
+            airline_routes[airline_id].at[al_route_idx, "Tickets_Sold"] = tickets_sold
+
+            # calculate total seats for all aircraft on route
+            planes = airline_route["aircraft_ids"]
+            fleet_df = airline_fleets[airline_id]
+            total_seats = 0
+            for acft_id in planes:
+                acft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
+                aircraft_type = aircraft_data.loc[acft["SizeClass"]]
+                total_seats += aircraft_type["Seats"]
+
+            # iterate over all aircraft assigned to itinerary
+            for acft_id in planes:
+                acft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
+                aircraft_type = aircraft_data.loc[acft["SizeClass"]]
+
+                itin_demand_share = float(aircraft_type["Seats"] * annual_itin_demand) / total_seats
+                pax_perflt_share = math.floor(itin_demand_share / acft["Flights_perYear"])
+                pax = min([pax_perflt_share, aircraft_type["Seats"]])
+                pax = max([pax, 0])
+        
+                fuel_per_flt = aircraft.calc_fuel_consumption(
+                    aircraft_type,
+                    acft,
+                    city_pair,
+                    pax,
+                )
+
+                fuel_per_year = fuel_per_flt * acft["Flights_perYear"]
+                total_fuel_kg += fuel_per_year
+                city_pair_data.at[city_pair_idx, "Fuel_Consumption_kg"] += fuel_per_year
+    
+    return total_fuel_kg, city_pair_data
+
+
+def fuel_price_with_saf(
+    CJFCost_USDperGallon: float,
+    saf_mandate_data: pd.DataFrame,
+    saf_pathway_data: pd.DataFrame,
+    year: int,
+    total_fuel_kg: float,
+):
+    """
+    Calculate the fuel price including mandated SAF proportion.
+    After satisfying the synthetic sub-mandate, the cheapest SAF pathways are used first.
+
+    Parameters
+    ----------
+    CJFCost_USDperGallon : float
+        Conventional jet fuel price in USD per gallon.
+    saf_mandate_data : pd.DataFrame
+        DataFrame containing year-by-year SAF mandate and synthetic sub-mandate.
+    saf_pathway_data : pd.DataFrame
+        DataFrame containing data on individual SAF production pathways.
+    year : int
+        Year of the simulation.
+    total_fuel_kg : float
+        Total fuel consumption in kg in the previous year of simulation.
+    
+    Returns
+    -------
+    FuelCost_USDperGallon : float
+        Average fuel price in USD per gallon including CJF and SAF.
+    """
+    if year < saf_mandate_data["Year"].min():
+        # no SAF mandate in this year
+        return CJFCost_USDperGallon
+    
+    saf_mandate_data = saf_mandate_data.sort_values(by="Year")
+
+    if year > saf_mandate_data["Year"].max():
+        # use the last SAF mandate value for all future years
+        SAF_Mandate = saf_mandate_data["SAF_Mandate"].values[-1]
+        Synth_Mandate = saf_mandate_data["Synthetic_Sub_Mandate"].values[-1]
+
+    SAF_Mandate = saf_mandate_data.loc[saf_mandate_data["Year"] == year, "SAF_Mandate"].values[0]
+    Synth_Mandate = saf_mandate_data.loc[saf_mandate_data["Year"] == year, "Synthetic_Sub_Mandate"].values[0]
+
+    if SAF_Mandate == 0:
+        # no SAF mandate in this year
+        return CJFCost_USDperGallon
+    
+    # calculate price in the current year of each SAF pathway
+    saf_pathway_data["Cost_USDperkg_current"] = 0.0
+    saf_pathway_data["Max_Output_Mt"] = 0.0
+    for idx, pathway in saf_pathway_data.iterrows():
+        # linearly interpolate cost
+        cost_2030 = pathway["Cost_USDperMJ_2030"]
+        cost_2050 = pathway["Cost_USDperMJ_2050"]
+        cost_USDperMJ = cost_2030 + (cost_2050 - cost_2030) * (year - 2030) / (2050 - 2030)
+        saf_pathway_data.at[idx, "Cost_USDperkg_current"] = cost_USDperMJ * FUEL_ENERGY_MJ_KG
+
+        if pathway["Pathway"] == "PtL":
+            saf_pathway_data.at[idx, "Max_Output_Mt"] = -1.0  # PtL pathway is not limited by feedstock availability
+        else:
+            # linearly interpolate feedstock availability between Mt_Feedstock_2030 and Mt_Feedstock_2050
+            feedstock_2030 = pathway["Mt_Feedstock_2030"]
+            feedstock_2050 = pathway["Mt_Feedstock_2050"]
+            feedstock_current = feedstock_2030 + (feedstock_2050 - feedstock_2030) * (year - 2030) / (2050 - 2030)
+            saf_pathway_data.at[idx, "Max_Output_Mt"] = feedstock_current * pathway["SAF_Fraction"] * pathway["Fuel_Yield"]
+    
+    # sort pathways by cost
+    saf_pathway_data = saf_pathway_data.sort_values(by="Cost_USDperkg_current")
+
+    # determine average price using cheapest pathways first after meeting synthetic sub-mandate
+    saf_to_assign = SAF_Mandate * total_fuel_kg
+    saf_total_cost_USD = 0.0
+    if Synth_Mandate > 0:
+        kg_from_pathway = Synth_Mandate * total_fuel_kg
+        saf_to_assign -= kg_from_pathway
+        saf_total_cost_USD += kg_from_pathway * saf_pathway_data.loc[
+            saf_pathway_data["Pathway"] == "PtL", "Cost_USDperkg_current"
+        ].values[0]
+
+    for idx, pathway in saf_pathway_data.iterrows():
+        if saf_to_assign <= 0:
+            break
+        if pathway["Pathway"] == "PtL":
+            # PtL pathway is not limited by feedstock availability
+            kg_from_pathway = saf_to_assign
+        else:
+            kg_from_pathway = min([pathway["Max_Output_Mt"] * 1e9, saf_to_assign])  # 1 Mt = 1 million tonnes = 1e9 kg
+        saf_to_assign -= kg_from_pathway
+        saf_total_cost_USD += kg_from_pathway * pathway["Cost_USDperkg_current"]
+
+    # include cost of conventional jet fuel
+    cjf_kg = (1-SAF_Mandate) * total_fuel_kg
+    cjf_total_cost_USD = cjf_kg * FUEL_GALLONS_PER_KG * CJFCost_USDperGallon
+
+    FuelCost_USDperkg = (saf_total_cost_USD + cjf_total_cost_USD) / total_fuel_kg
+    FuelCost_USDperGallon = FuelCost_USDperkg / FUEL_GALLONS_PER_KG
+
+    return FuelCost_USDperGallon

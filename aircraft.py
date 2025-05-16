@@ -17,9 +17,13 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
 
     ranges = []
     for _, aircraft in aircraft_data.iterrows():
+        if aircraft["NarrowWideHeavy"] == 0:
+            payload_proportion = 1.0  # since narrow body jets don't carry a significant non-passenger payload
+        else:
+            payload_proportion = MAX_RANGE_PAYLOAD_PROPORTION
         # calculate landing weight
         landing_weight_kg = (
-            aircraft["OEM_kg"] + MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"]
+            aircraft["OEM_kg"] + payload_proportion * aircraft["MaxPayload_kg"]
         )
 
         # calculate weight before loiter using Breguet range equation
@@ -38,13 +42,13 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
             DIVERSION_DIST_METRES / breguet_factor
         )
 
-        # calculate take-off weight (max fuel + 80% payload doesn't necessarily reach MTOM)
+        # calculate take-off weight (max fuel + prescribed payload doesn't necessarily reach MTOM)
         takeoff_weight_kg = min(
             [
                 aircraft["MTOM_kg"],
                 aircraft["OEM_kg"]
                 + aircraft["MaxFuel_kg"]
-                + (MAX_RANGE_PAYLOAD_PROPORTION * aircraft["MaxPayload_kg"])
+                + (payload_proportion * aircraft["MaxPayload_kg"])
             ]
         )
 
@@ -231,12 +235,11 @@ def calc_flights_per_year(
     return math.floor((legs_per_48hrs * (days_operational / 2))/2)
 
 
-def calc_fuel_cost(
+def calc_fuel_consumption(
     aircraft_type: pd.Series,
     aircraft: pd.Series,
     city_pair: pd.Series,
     pax: int,
-    FuelCost_USDperGallon: float
 ) -> float:
     """
     Calculate fuel consumption for a given route and aircraft type
@@ -248,11 +251,10 @@ def calc_fuel_cost(
     aircraft : pd.Series
     city_pair : pd.Series
     pax : int
-    FuelCost_USDperGallon : float
 
     Returns
     -------
-    fuel_cost_USD : float (-1 if fuel consumption is more than max fuel capacity or take-off weight is more than MTOM)
+    fuel_consumption_kg : float
     """
     # TODO: improve loiter fuel usage calculation
 
@@ -285,8 +287,33 @@ def calc_fuel_cost(
         print("WARNING [calc_fuel_cost]: required take-off mass exceeds MTOM")
         print(f"Itinerary from {city_pair['OriginCityID']} to {city_pair['DestinationCityID']} with aircraft type {aircraft_type_id}")
     
+    return fuel_consumption_kg
+
+
+def calc_fuel_cost(
+    aircraft_type: pd.Series,
+    aircraft: pd.Series,
+    city_pair: pd.Series,
+    pax: int,
+    FuelCost_USDperGallon: float
+) -> float:
+    """
+    Calculate fuel cost using fuel consumption and fuel cost per gallon
+
+    Parameters
+    ----------
+    aircraft_type : pd.Series
+    aircraft : pd.Series
+    city_pair : pd.Series
+    pax : int
+    FuelCost_USDperGallon : float
+
+    Returns
+    -------
+    fuel_cost_USDperflt : float
+    """
+    fuel_consumption_kg = calc_fuel_consumption(aircraft_type, aircraft, city_pair, pax)
     fuel_cost_USDperflt = fuel_consumption_kg * FUEL_GALLONS_PER_KG * FuelCost_USDperGallon
-    
     return fuel_cost_USDperflt
 
 

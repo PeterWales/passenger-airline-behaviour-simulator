@@ -44,10 +44,12 @@ def plot_fleet_data(
 
     plt.xlim(start_year, end_year)
     plt.ylim(bottom=0)
+    plt.xticks(year_range)
 
     plt.xlabel("Year")
     plt.ylabel("Number of Aircraft Deployed")
-    plt.legend()
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
 
     # plt.show()
 
@@ -60,7 +62,7 @@ def plot_fleet_data(
 
 if __name__ == "__main__":
     start_year = 2015
-    end_year = 2025
-    load_folder_path = "output_Ref"
-    output_folder_path = "output_Ref"
+    end_year = 2033
+    load_folder_path = "output_BSL_15_05_PM"
+    output_folder_path = "output_BSL_15_05_PM"
     plot_fleet_data(start_year, end_year, load_folder_path, output_folder_path)

@@ -512,6 +512,7 @@ def annual_update(
     income_data: pd.DataFrame,
     airport_expansion_data: pd.DataFrame,
     year_entering: int,
+    run_parameters,
 ):
     for _, country in country_data.iterrows():
         country_pop = population_data[population_data["Number"] == country["Number"]]
@@ -525,9 +526,13 @@ def annual_update(
             city_data.loc[city_id, "Income_USDpercap"] *= inc_multiplier
 
     # apply airport capacity expansion lever if applicable
-    if not airport_expansion_data.empty:
+    if (
+        (run_parameters["RunAirportExpansion"] == "y" or run_parameters["RunAirportExpansion"] == "Y")
+        and not airport_expansion_data.empty
+    ):
         for _, row in airport_expansion_data.iterrows():
             if row["ExpansionYear"] == year_entering:
+                print(f"    Adding {row['AdditionalFlightsPerYear']} flights per year to city: {row['CityName']}")
                 city_id = row["CityID"]
                 city_data.loc[city_id, "Capacity_MovtsPerHr"] += row["AdditionalFlightsPerYear"] // OP_HRS_PER_YEAR
 

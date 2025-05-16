@@ -639,20 +639,22 @@ def find_itin_alternative(
                         city_pair_in["Exp_Utility_Sum"] -= test_itin_in_exp_utility
                         # note test_itin_out and test_itin_in are never added to airline_routes dataframe, so no need to reset them
 
-                    # calculate change in profit per seat
-                    test_delta_profit_per_seat = (
-                        new_itin_new_profit_per_seat - new_itin_old_profit_per_seat
-                        + reassign_new_profit_per_seat - reassign_old_profit_per_seat
-                    )
+                    # check new itinerary is actually profitable
+                    if new_itin_new_profit_per_seat > 0:
+                        # calculate change in profit per seat
+                        test_delta_profit_per_seat = (
+                            new_itin_new_profit_per_seat - new_itin_old_profit_per_seat
+                            + reassign_new_profit_per_seat - reassign_old_profit_per_seat
+                        )
 
-                    # if test makes more profit than current itinerary, save it and stop searching
-                    if test_delta_profit_per_seat > 0:
-                        delta_profit_per_seat = test_delta_profit_per_seat
-                        new_origin = origin_id
-                        new_destination = destination_id
-                        addnl_flights_per_year = flights_per_year
-                        addnl_seat_flights_per_year = seat_flights_per_year
-                        break
+                        # if test makes more profit than current itinerary, save it and stop searching
+                        if test_delta_profit_per_seat > 0:
+                            delta_profit_per_seat = test_delta_profit_per_seat
+                            new_origin = origin_id
+                            new_destination = destination_id
+                            addnl_flights_per_year = flights_per_year
+                            addnl_seat_flights_per_year = seat_flights_per_year
+                            break
     
     return delta_profit_per_seat, new_origin, new_destination, addnl_flights_per_year, addnl_seat_flights_per_year
 
