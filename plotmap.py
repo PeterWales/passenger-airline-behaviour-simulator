@@ -1,5 +1,5 @@
 import os
-import pickle
+import pandas as pd
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap, PowerNorm
@@ -7,14 +7,13 @@ import numpy as np
 
 
 def map_plot(
-    cache_folder_path: str,
+    plot_year: int,
+    load_folder_path: str,
     output_folder_path: str,
     long_range: list | None,
     lat_range: list | None
 ):
-    # import data from .pkl
-    with open(os.path.join(cache_folder_path, "city_pair_data.pkl"), "rb") as f:
-        city_pair_data = pickle.load(f)
+    city_pair_data = pd.read_csv(os.path.join(load_folder_path, f"city_pair_data_{plot_year}.csv"))
 
     # define colours
     background = (1.0, 1.0, 1.0, 1.0)
@@ -94,7 +93,7 @@ def map_plot(
     # plt.show()
 
     # save the map
-    output_filename = os.path.join(output_folder_path, "map_AUS.png")
+    output_filename = os.path.join(output_folder_path, f"map_{plot_year}.png")
     plt.savefig(output_filename, format='png', bbox_inches='tight')
 
     return 0
@@ -102,11 +101,10 @@ def map_plot(
 
 
 if __name__ == "__main__":
-    cache_folder_name = "cache"
+    plot_year = 2016
+    load_folder_path = "output_BSL_15_05_AM"
+    output_folder_path = "output_BSL_15_05_AM"
 
-    file_path = os.path.dirname(__file__)
-    cache_folder_path = os.path.join(file_path, cache_folder_name)
-    output_folder_path = os.path.join(file_path, "output")
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
 
@@ -118,4 +116,4 @@ if __name__ == "__main__":
     long_range = [-20, 40]
     lat_range = [30, 75]
 
-    map_plot(cache_folder_path, output_folder_path, long_range, lat_range)
+    map_plot(plot_year, load_folder_path, output_folder_path, long_range, lat_range)
