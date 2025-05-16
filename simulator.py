@@ -258,16 +258,16 @@ def run_simulation(
         airlines.to_csv(os.path.join(save_folder_path, f"airlines_{base_year}.csv"), index=False)
         # fuel_data_out saved inside simulate_base_year
     else:
-        # load start year from cache
-        with open(os.path.join(cache_folder_path, "intermediate", "year_completed.pkl"), "rb") as f:
-            start_year = pickle.load(f)
-        if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
-            suffix = f"_{start_year}"
+        annual_cache_path = os.path.join(cache_folder_path, f"intermediate_{run_parameters['IDToContinue']}")
+        with open(os.path.join(annual_cache_path, "year_completed.pkl"), "rb") as f:
+            year_completed = pickle.load(f)
+        if run_parameters["YearToContinue"] > year_completed + 1:
+            start_year = year_completed + 1
         else:
-            suffix = ""
-        with open(os.path.join(cache_folder_path, "intermediate", f"total_fuel_kg{suffix}.pkl"), "rb") as f:
+            start_year = run_parameters["YearToContinue"]
+        
+        with open(os.path.join(annual_cache_path, f"total_fuel_kg_{start_year - 1}.pkl"), "rb") as f:
             total_fuel_kg = pickle.load(f)
-        start_year += 1
 
     # iterate over desired years
     for year in range(start_year, end_year + 1):
@@ -375,27 +375,22 @@ def run_simulation(
             os.path.join(save_folder_path, f"fuel_data_{year}.csv"), index=False
         )
 
-        # save to pkl so simulation can be resumed if interrupted (overwrite at the end of each year unless running as baseline)
-        if run_parameters["IsBaseline"] == "y" or run_parameters["IsBaseline"] == "Y":
-            suffix = f"_{year}"
-        else:
-            suffix = ""
-        
-        annual_cache_path = os.path.join(cache_folder_path, "intermediate")
+        # save to pkl so simulation can be resumed from any year
+        annual_cache_path = os.path.join(cache_folder_path, f"intermediate_{run_parameters['RunID']}")
         if not os.path.exists(annual_cache_path):
             os.makedirs(annual_cache_path)
         
-        with open(os.path.join(annual_cache_path, f"airlines{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airlines_{year}.pkl"), "wb") as f:
             pickle.dump(airlines, f)
-        with open(os.path.join(annual_cache_path, f"airline_fleets{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_fleets_{year}.pkl"), "wb") as f:
             pickle.dump(airline_fleets, f)
-        with open(os.path.join(annual_cache_path, f"airline_routes{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"airline_routes_{year}.pkl"), "wb") as f:
             pickle.dump(airline_routes, f)
-        with open(os.path.join(annual_cache_path, f"city_data{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"city_data_{year}.pkl"), "wb") as f:
             pickle.dump(city_data, f)
-        with open(os.path.join(annual_cache_path, f"city_pair_data{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"city_pair_data_{year}.pkl"), "wb") as f:
             pickle.dump(city_pair_data, f)
-        with open(os.path.join(annual_cache_path, f"total_fuel_kg{suffix}.pkl"), "wb") as f:
+        with open(os.path.join(annual_cache_path, f"total_fuel_kg_{year}.pkl"), "wb") as f:
             pickle.dump(total_fuel_kg, f)
         with open(os.path.join(annual_cache_path, "city_lookup.pkl"), "wb") as f:
             pickle.dump(city_lookup, f)
