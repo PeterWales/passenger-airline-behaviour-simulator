@@ -32,6 +32,7 @@ def simulate_base_year(
     saf_mandate_data,
     saf_pathway_data,
     run_parameters: dict,
+    city_lookup: list[list[int]],
 ) -> tuple[list[pd.DataFrame], pd.DataFrame, float]:
     print(f"    Simulating base year ({year})...")
     print("    Time: ", datetime.datetime.now(), "\n")
@@ -75,7 +76,7 @@ def simulate_base_year(
     demand_iters["base"] = city_pair_data["Total_Demand"]
 
     for iteration in range(iteration_limit):
-        print(f"        Iteration {iteration+1} of fare optimisation")
+        print(f"        Iteration {iteration+1} of initialisation...")
 
         # allow airlines to adjust their fares
         airline_routes, city_pair_data = al.optimise_fares(
@@ -89,6 +90,52 @@ def simulate_base_year(
             FuelCost_USDperGallon,
             demand_coefficients,
         )
+
+        # allow airlines to reassign aircraft to different routes (no addition or removal of aircraft)
+        airline_routes, airline_fleets, city_pair_data, city_data = al.reassign_ac_for_profit(
+            airlines,
+            airline_routes,
+            airline_fleets,
+            city_pair_data,
+            city_data,
+            city_lookup,
+            aircraft_data,
+            demand_coefficients,
+            FuelCost_USDperGallon,
+            year,
+            allow_lease_changes=False,
+        )
+
+        # update airline itinerary times
+        airline_routes = al.update_itinerary_times(
+            airlines,
+            airline_routes,
+            city_data,
+            city_pair_data,
+            aircraft_data,
+            airline_fleets,
+        )
+
+        # calculate fuel usage
+        total_fuel_kg, city_pair_data = update_fuel_and_sales(
+            airlines,
+            airline_routes,
+            airline_fleets,
+            city_pair_data,
+            aircraft_data,
+        )
+
+        # recalculate fuel cost to account for change in fuel consumption
+        if run_parameters["RunSAFMandate"] == "y" or run_parameters["RunSAFMandate"] == "Y":
+            FuelCost_USDperGallon = fuel_price_with_saf(
+                CJFCost_USDperGallon,
+                saf_mandate_data,
+                saf_pathway_data,
+                year,
+                total_fuel_kg,
+            )
+        else:
+            FuelCost_USDperGallon = CJFCost_USDperGallon
 
         # write new columns to dataframes
         fare_iters[f"iter{iteration}"] = city_pair_data["Mean_Fare_USD"]
@@ -199,6 +246,7 @@ def run_simulation(
                 saf_mandate_data,
                 saf_pathway_data,
                 run_parameters,
+                city_lookup,
             )
         else:
             with open(os.path.join(cache_folder_path, "total_fuel_kg.pkl"), "rb") as f:
@@ -277,6 +325,8 @@ def run_simulation(
             FuelCost_USDperGallon,
             demand_coefficients,
         )
+
+        # allow airlines to reassign aircraft to different routes, and add/retire aircraft
         airline_routes, airline_fleets, city_pair_data, city_data = al.reassign_ac_for_profit(
             airlines,
             airline_routes,
@@ -288,6 +338,7 @@ def run_simulation(
             demand_coefficients,
             FuelCost_USDperGallon,
             year,
+            allow_lease_changes=True,
         )
 
         # update airline itinerary times
