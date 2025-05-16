@@ -5,7 +5,10 @@ import numpy as np
 import demand as demand
 import aircraft as acft
 import reassignment
-from constants import OP_HRS_PER_YEAR
+from constants import (
+    OP_HRS_PER_YEAR,
+    CURFEW_HOURS,
+)
 
 
 def set_base_values(
@@ -126,9 +129,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
             if not (airport_id == 0):
                 airport = airport_data.loc[airport_id]
 
-                capacity_sum += float(
-                    airport["Capacity_movts_hr"]
-                )
+                capacity_sum += calc_airport_capacity(airport)
 
                 longest_runway_found = max(
                     longest_runway_found,
@@ -248,6 +249,43 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     city_data["LongestRunway_m"] = longest_runway_m
 
     return city_data, city_lookup
+
+
+def calc_airport_capacity(airport):
+    """
+    Adjust airport capacity to account for variation in demand through a single day.
+    The airport is considered to be running at 100% when a single 3-hr block is running at 100% capacity.
+    Adjustment is limited to between 2/3 and 1.0 of the original capacity.
+
+    Parameters
+    ----------
+    airport : pd.Series
+        A row of the airport data DataFrame
+    
+    Returns
+    -------
+    new_capacity_per_hr : float
+        The adjusted capacity of the airport in movements per hour
+    """
+    binned_dep_demand = [airport[f"Depdemand_flts_timebin{i}"] for i in range(1, 9)]
+    binned_arr_demand = [airport[f"Arrdemand_flts_timebin{i}"] for i in range(1, 9)]
+    combined_binned_demand = [dep + arr for dep, arr in zip(binned_dep_demand, binned_arr_demand)]
+    max_binned_demand = max(combined_binned_demand)
+    total_demand = sum(combined_binned_demand)
+
+    if max_binned_demand == 0:
+        return airport["Capacity_movts_hr"]
+    
+    multiplier = 3*airport["Capacity_movts_hr"] / max_binned_demand
+    new_capacity_per_hr = math.floor(total_demand * multiplier) / (24-CURFEW_HOURS)
+
+    # limit adjustment to between two thirds of the original capacity and the original capacity
+    new_capacity_per_hr = min(new_capacity_per_hr, airport["Capacity_movts_hr"])
+    new_capacity_per_hr = max(new_capacity_per_hr, airport["Capacity_movts_hr"]*2.0/3.0)
+
+    new_capacity_per_hr = round(new_capacity_per_hr, 3)
+
+    return new_capacity_per_hr
 
 
 def enforce_capacity(
