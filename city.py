@@ -129,16 +129,15 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
             if not (airport_id == 0):
                 airport = airport_data.loc[airport_id]
 
-                capacity_sum += calc_airport_capacity(airport)
+                airport_capacity_per_hr = calc_airport_capacity(airport)
+                capacity_sum += airport_capacity_per_hr
 
                 longest_runway_found = max(
                     longest_runway_found,
                     float(airport["LongestRunway_m"]),
                 )
 
-                lat_sum += float(airport["Latitude"]) * float(
-                    airport["Capacity_movts_hr"]
-                )
+                lat_sum += float(airport["Latitude"]) * airport_capacity_per_hr
 
                 # check for edge case where a city has airports either side of the 180deg longitude line
                 apt_longitude = float(airport["Longitude"])
@@ -151,13 +150,11 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                     else:
                         apt_longitude -= 360.0
                     long_flag = True
-                long_sum += apt_longitude * float(
-                    airport["Capacity_movts_hr"]
-                )
+                long_sum += apt_longitude * airport_capacity_per_hr
 
                 dom_fee_pax_sum += float(
                     airport["LandingCosts_PerPax_Domestic_2015USdollars"]
-                ) * float(airport["Capacity_movts_hr"])
+                ) * airport_capacity_per_hr
                 dom_fee_mov_sum = list(
                     map(
                         add,
@@ -167,7 +164,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                                 airport[
                                     f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"
                                 ]
-                            ) * float(airport["Capacity_movts_hr"])
+                            ) * airport_capacity_per_hr
                             for ac in range(n_aircraft)
                         ],
                     )
@@ -177,7 +174,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                     airport[
                         "LandingCosts_PerPax_International_2015USdollars"
                     ]
-                ) * float(airport["Capacity_movts_hr"])
+                ) * airport_capacity_per_hr
                 intnl_fee_mov_sum = list(
                     map(
                         add,
@@ -187,7 +184,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
                                 airport[
                                     f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"
                                 ]
-                            ) * float(airport["Capacity_movts_hr"])
+                            ) * airport_capacity_per_hr
                             for ac in range(n_aircraft)
                         ],
                     )
@@ -195,10 +192,10 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
                 taxi_out_sum += float(
                     airport["UnimpTaxiOut_min"]
-                ) * float(airport["Capacity_movts_hr"])
+                ) * airport_capacity_per_hr
                 taxi_in_sum += float(
                     airport["UnimpTaxiIn_min"]
-                ) * float(airport["Capacity_movts_hr"])
+                ) * airport_capacity_per_hr
             else:
                 # airport_id == 0 => there are no more airports for that city
                 break
