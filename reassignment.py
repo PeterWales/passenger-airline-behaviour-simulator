@@ -420,7 +420,7 @@ def find_itin_alternative(
                         # airline already flies this route
 
                         # check not exceeding max number of each aircraft size on this route
-                        reassign_ac_size = reassign_ac["SizeClass"]
+                        reassign_ac_size = int(reassign_ac["SizeClass"])
                         max_n_same_size = ROUTE_MAX_SINGLE_SZ[f"size_{reassign_ac_size}"]
                         if max_n_same_size != -1:
                             n_same_size = 1  # include the aircraft being reassigned
