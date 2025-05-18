@@ -1413,7 +1413,7 @@ def reassign_ac_for_profit(
                     aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
 
                     n_aircraft_sum = sum(airlines.loc[airline_id, "n_Aircraft"])
-                    max_expansion = min(MAX_EXPANSION_PLANES, math.floor(n_aircraft_sum * MAX_EXPANSION_PROPORTION))  # max no. a/c or % of fleet size, whichever is smaller
+                    max_expansion = max(MAX_EXPANSION_PLANES, math.floor(n_aircraft_sum * MAX_EXPANSION_PROPORTION))  # max no. a/c or % of fleet size, whichever is larger
                     n_new_aircraft = 0
 
                     for aircraft_size, aircraft in aircraft_data.iterrows():
