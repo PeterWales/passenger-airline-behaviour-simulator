@@ -347,6 +347,7 @@ def initialise_fleet_assignment(
                                     city_data,
                                     airline_routes,
                                     capacity_flag_list,
+                                    airlines,
                                 ) = create_aircraft(
                                     aircraft_id_list,
                                     aircraft_id,
@@ -373,6 +374,7 @@ def initialise_fleet_assignment(
                                     inbound_route,
                                     capacity_flag_list,
                                     regions,
+                                    airlines,
                                 )
 
                         elif distance < 2*aircraft["TypicalRange_m"]:
@@ -414,6 +416,7 @@ def initialise_fleet_assignment(
                                         city_data,
                                         airline_routes,
                                         capacity_flag_list,
+                                        airlines,
                                     ) = create_aircraft(
                                         aircraft_id_list,
                                         aircraft_id,
@@ -440,6 +443,7 @@ def initialise_fleet_assignment(
                                         inbound_route,
                                         capacity_flag_list,
                                         regions,
+                                        airlines,
                                     )
 
                         else:
@@ -499,6 +503,7 @@ def create_aircraft(
     inbound_route: pd.Series,
     capacity_flag_list: list,
     regions: list | None,
+    airlines: pd.DataFrame,
 ):
     if fuel_stop == -1:
         fuel_stop_series = None
@@ -670,9 +675,15 @@ def create_aircraft(
                     and (fuel_stop not in capacity_flag_list)
                 ):
                     capacity_flag_list.append(fuel_stop)
+
+        # remove aircraft from airline["n_Aircraft"] list
+        airlines[airline_id]["n_Aircraft"][aircraft_size] -= 1
     
-    # else:
-        # itinerary exists entirely outside the simulated region => do nothing
+    else:
+        # itinerary exists entirely outside the simulated region
+
+        # remove aircraft from airline["n_Aircraft"] list
+        airlines[airline_id]["n_Aircraft"][aircraft_size] -= 1
 
     return (
         aircraft_id_list,
@@ -688,6 +699,7 @@ def create_aircraft(
         city_data,
         airline_routes,
         capacity_flag_list,
+        airlines,
     )
 
 
