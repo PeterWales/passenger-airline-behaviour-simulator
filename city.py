@@ -39,23 +39,26 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
         Income_USDpercap : float
             Income per capita in the current year
         Latitude : float
-            Capacity-weighted mean latitude of all airports in the city
+            Demand-weighted mean latitude of all airports in the city
         Longitude : float
-            Capacity-weighted mean longitude of all airports in the city
+            Demand-weighted mean longitude of all airports in the city
         Domestic_Fees_USDperPax : float
-            Capacity-weighted mean of domestic landing fees per passenger
+            Demand-weighted mean of domestic landing fees per passenger
         Domestic_Fees_USDperMovt : list[float]
-            Capacity-weighted mean of domestic landing fees per landing for each aircraft size
+            Demand-weighted mean of domestic landing fees per landing for each aircraft size
         International_Fees_USDperPax : float
-            Capacity-weighted mean of international landing fees per passenger
+            Demand-weighted mean of international landing fees per passenger
         International_Fees_USDperMovt : list[float]
-            Capacity-weighted mean of international landing fees per landing for each aircraft size
+            Demand-weighted mean of international landing fees per landing for each aircraft size
         Taxi_Out_mins : float
-            Capacity-weighted mean of unimpeded taxi-out time in minutes
+            Demand-weighted mean of unimpeded taxi-out time in minutes
         Taxi_In_mins : float
-            Capacity-weighted mean of unimpeded taxi-in time in minutes
+            Demand-weighted mean of unimpeded taxi-in time in minutes
         Capacity_MovtsPerHr : float
             Total capacity of all airports in the city in movements per hour (takeoffs + landings)
+                A single airport is considered to be running at 100% capacity when a single 3-hr block is running at 100% capacity
+                A city is considered to be running at 100% capacity when a single airport is running at 100% capacity, assuming
+                city movements are added proportionally the the base year demand
         LongestRunway_m : float
             Length of the longest runway in the city
         Movts_Outside : int
@@ -111,7 +114,6 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     # loop over rows of city_data
     for idx, city in city_data.iterrows():
         # calculate capacity-weighted mean of airport data
-        capacity_sum = 0.0
         longest_runway_found = 0.0
         lat_sum = 0.0
         long_sum = 0.0
@@ -123,88 +125,103 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
         taxi_in_sum = 0.0
         airport_column = 1
         long_flag = False
+
+        total_demand = 0.0
+        airport_ids = []
+        airport_demand = []
+        airport_capacity = []
         while f"Airport_{airport_column}" in city.index:
             airport_id = int(city[f"Airport_{airport_column}"])
-
             if not (airport_id == 0):
                 airport = airport_data.loc[airport_id]
-
-                airport_capacity_per_hr = calc_airport_capacity(airport)
-                capacity_sum += airport_capacity_per_hr
-
-                longest_runway_found = max(
-                    longest_runway_found,
-                    float(airport["LongestRunway_m"]),
-                )
-
-                lat_sum += float(airport["Latitude"]) * airport_capacity_per_hr
-
-                # check for edge case where a city has airports either side of the 180deg longitude line
-                apt_longitude = float(airport["Longitude"])
-                if (
-                    apt_longitude * long_sum < 0.0
-                    and (apt_longitude > 90.0 or apt_longitude < -90.0)
-                ):
-                    if apt_longitude < 0.0:
-                        apt_longitude += 360.0
-                    else:
-                        apt_longitude -= 360.0
-                    long_flag = True
-                long_sum += apt_longitude * airport_capacity_per_hr
-
-                dom_fee_pax_sum += float(
-                    airport["LandingCosts_PerPax_Domestic_2015USdollars"]
-                ) * airport_capacity_per_hr
-                dom_fee_mov_sum = list(
-                    map(
-                        add,
-                        dom_fee_mov_sum,
-                        [
-                            float(
-                                airport[
-                                    f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"
-                                ]
-                            ) * airport_capacity_per_hr
-                            for ac in range(n_aircraft)
-                        ],
-                    )
-                )
-
-                intnl_fee_pax_sum += float(
-                    airport[
-                        "LandingCosts_PerPax_International_2015USdollars"
-                    ]
-                ) * airport_capacity_per_hr
-                intnl_fee_mov_sum = list(
-                    map(
-                        add,
-                        intnl_fee_mov_sum,
-                        [
-                            float(
-                                airport[
-                                    f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"
-                                ]
-                            ) * airport_capacity_per_hr
-                            for ac in range(n_aircraft)
-                        ],
-                    )
-                )
-
-                taxi_out_sum += float(
-                    airport["UnimpTaxiOut_min"]
-                ) * airport_capacity_per_hr
-                taxi_in_sum += float(
-                    airport["UnimpTaxiIn_min"]
-                ) * airport_capacity_per_hr
+                airport_ids.append(airport_id)
+                airport_demand.append(airport["PrevYearPaxDemand_ODSched"])
+                airport_capacity.append(calc_airport_capacity(airport))
+                total_demand += airport_demand[-1]
             else:
                 # airport_id == 0 => there are no more airports for that city
                 break
             airport_column += 1
+        
+        airport_demand_proportion = [demand / total_demand for demand in airport_demand]
+        city_capacity_options = []
+        for capacity, demand_proportion in zip(airport_capacity, airport_demand_proportion):
+            if demand_proportion > 0.0 and capacity > 0.0:
+                city_capacity_options.append(capacity / demand_proportion)
+        if len(city_capacity_options) == 0:
+            raise ValueError(f"City {idx} has no airport capacity")
 
-        if capacity_sum == 0.0:
-            raise ValueError("City has no airport capacity")
+        city_capacity_movts_per_hr = min(city_capacity_options)
 
-        city_longitude = long_sum / capacity_sum
+        for airport_id, demand in zip(airport_ids, airport_demand):
+            airport = airport_data.loc[airport_id]
+
+            longest_runway_found = max(
+                longest_runway_found,
+                float(airport["LongestRunway_m"]),
+            )
+
+            lat_sum += float(airport["Latitude"]) * demand
+
+            # check for edge case where a city has airports either side of the 180deg longitude line
+            apt_longitude = float(airport["Longitude"])
+            if (
+                apt_longitude * long_sum < 0.0
+                and (apt_longitude > 90.0 or apt_longitude < -90.0)
+            ):
+                if apt_longitude < 0.0:
+                    apt_longitude += 360.0
+                else:
+                    apt_longitude -= 360.0
+                long_flag = True
+            long_sum += apt_longitude * demand
+
+            dom_fee_pax_sum += float(
+                airport["LandingCosts_PerPax_Domestic_2015USdollars"]
+            ) * demand
+            dom_fee_mov_sum = list(
+                map(
+                    add,
+                    dom_fee_mov_sum,
+                    [
+                        float(
+                            airport[
+                                f"LandingCosts_PerMovt_Size{ac}_Domestic_2015USdollars"
+                            ]
+                        ) * demand
+                        for ac in range(n_aircraft)
+                    ],
+                )
+            )
+
+            intnl_fee_pax_sum += float(
+                airport[
+                    "LandingCosts_PerPax_International_2015USdollars"
+                ]
+            ) * demand
+            intnl_fee_mov_sum = list(
+                map(
+                    add,
+                    intnl_fee_mov_sum,
+                    [
+                        float(
+                            airport[
+                                f"LandingCosts_PerMovt_Size{ac}_International_2015USdollars"
+                            ]
+                        ) * demand
+                        for ac in range(n_aircraft)
+                    ],
+                )
+            )
+
+            taxi_out_sum += float(
+                airport["UnimpTaxiOut_min"]
+            ) * demand
+            taxi_in_sum += float(
+                airport["UnimpTaxiIn_min"]
+            ) * demand
+
+        city_longitude = long_sum / total_demand
         if long_flag:
             if city_longitude < -180.0:
                 city_longitude += 360.0
@@ -213,19 +230,19 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
 
         city_lookup[city["Country"]].append(idx)
 
-        latitude.append(lat_sum / capacity_sum)
+        latitude.append(lat_sum / total_demand)
         longitude.append(city_longitude)
-        domestic_fees_USDperpax.append(dom_fee_pax_sum / capacity_sum)
+        domestic_fees_USDperpax.append(dom_fee_pax_sum / total_demand)
         domestic_fees_USDpermvmt.append(
-            list(map(lambda x: x / capacity_sum, dom_fee_mov_sum))
+            list(map(lambda x: x / total_demand, dom_fee_mov_sum))
         )
-        international_fees_USDperpax.append(intnl_fee_pax_sum / capacity_sum)
+        international_fees_USDperpax.append(intnl_fee_pax_sum / total_demand)
         international_fees_USDpermvmt.append(
-            list(map(lambda x: x / capacity_sum, intnl_fee_mov_sum))
+            list(map(lambda x: x / total_demand, intnl_fee_mov_sum))
         )
-        taxi_out_mins.append(taxi_out_sum / capacity_sum)
-        taxi_in_mins.append(taxi_in_sum / capacity_sum)
-        capacity_perhr.append(capacity_sum)
+        taxi_out_mins.append(taxi_out_sum / total_demand)
+        taxi_in_mins.append(taxi_in_sum / total_demand)
+        capacity_perhr.append(city_capacity_movts_per_hr)
         longest_runway_m.append(longest_runway_found)
 
     # add new columns to city_data
