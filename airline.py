@@ -291,6 +291,7 @@ def initialise_fleet_assignment(
 
         # assign aircraft seat capacity by base demand starting with the largest aircraft on the longest routes
         distances.sort(key=lambda x: x[2], reverse=True)
+        aircraft_data = aircraft_data.sort_values(by="Seats", ascending=False)
         aircraft_avail = airline["n_Aircraft"].copy()
         aircraft_id = -1
         for origin_id, destination_id, distance, route_RPKs in distances:
@@ -1409,8 +1410,8 @@ def reassign_ac_for_profit(
                         ]
                     airlines.at[airline_id, "Grounded_acft"] = []
                 else:
-                    # allow airline to lease new aircraft, starting with longest range aircraft type first
-                    aircraft_data.sort_values(by="TypicalRange_m", inplace=True, ascending=False)
+                    # allow airline to lease new aircraft, starting with largest capacity aircraft type first
+                    aircraft_data.sort_values(by="Seats", inplace=True, ascending=False)
 
                     n_aircraft_sum = sum(airlines.loc[airline_id, "n_Aircraft"])
                     max_expansion = max(MAX_EXPANSION_PLANES, math.floor(n_aircraft_sum * MAX_EXPANSION_PROPORTION))  # max no. a/c or % of fleet size, whichever is larger
