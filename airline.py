@@ -253,11 +253,11 @@ def initialise_fleet_assignment(
 
                         route_RPKs = (
                             outbound_route["BaseYearODDemandPax_Est"]
-                            * outbound_route["Great_Circle_Distance_m"]
+                            * outbound_route["Great_Circle_Distance_m"] / 1000.0
                         )
                         route_RPKs += (
                             inbound_route["BaseYearODDemandPax_Est"]
-                            * inbound_route["Great_Circle_Distance_m"]
+                            * inbound_route["Great_Circle_Distance_m"] / 1000.0
                         )
                         possible_RPKs += route_RPKs
                         # append a tuple (origin_id, destination_id, distance, RPKs) to distances list
