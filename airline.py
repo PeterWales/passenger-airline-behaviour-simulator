@@ -678,13 +678,13 @@ def create_aircraft(
                     capacity_flag_list.append(fuel_stop)
 
         # remove aircraft from airline["n_Aircraft"] list
-        airlines[airline_id]["n_Aircraft"][aircraft_size] -= 1
+        airlines.loc[airline_id, "n_Aircraft"][aircraft_size] -= 1
     
     else:
         # itinerary exists entirely outside the simulated region
 
         # remove aircraft from airline["n_Aircraft"] list
-        airlines[airline_id]["n_Aircraft"][aircraft_size] -= 1
+        airlines.loc[airline_id, "n_Aircraft"][aircraft_size] -= 1
 
     return (
         aircraft_id_list,
