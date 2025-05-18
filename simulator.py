@@ -149,7 +149,10 @@ def simulate_base_year(
         if iteration > 0:
             diff = abs(fare_iters[f"iter{iteration}"] - fare_iters[f"iter{iteration-1}"])
             max_diff = diff.max()
-            mean_diff = diff.mean()
+            if max_diff > 0:
+                mean_diff = diff[diff > 0].mean()
+            else:
+                mean_diff = 0.0
             print(f"        Maximum fare shift: {max_diff} USD")
             print(f"        Mean fare shift: {mean_diff} USD")
             
