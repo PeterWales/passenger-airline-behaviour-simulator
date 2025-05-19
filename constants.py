@@ -13,7 +13,7 @@ FUEL_ENERGY_MJ_KG = 43.1  # MJ/kg
 PASSENGER_AC_FUEL_PROPORTION = 0.77  # proportion of fuel used for passenger a/c (vs cargo and private a/c) - neglect military a/c
 MIN_INIT_PLANES_PER_AL = 10  # min initial number of planes assigned to an airline (unless country has fewer planes than this)
 MAX_EXPANSION_PLANES = 10  # max number of planes an airline can add in a single year
-MAX_EXPANSION_PROPORTION = 0.15  # max proportion of fleet size that an airline can add in a single year
+MAX_EXPANSION_PROPORTION = 0.10  # max proportion of fleet size that an airline can add in a single year
 PRICE_ELAS_LH_THRESHOLD = 4828032  # 3000 miles in metres
 INCOME_ELAS_THRESHOLDS = {
     "short": 0.0,
