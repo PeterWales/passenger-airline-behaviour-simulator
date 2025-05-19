@@ -12,6 +12,7 @@ from constants import (
     FARE_CONVERGENCE_TOLERANCE,
     FUEL_ENERGY_MJ_KG,
     FUEL_GALLONS_PER_KG,
+    PASSENGER_AC_FUEL_PROPORTION,
 )
 
 
@@ -556,6 +557,7 @@ def fuel_price_with_saf(
     """
     Calculate the fuel price including mandated SAF proportion.
     After satisfying the synthetic sub-mandate, the cheapest SAF pathways are used first.
+    Assume cargo aircraft and private jets are subject to the same SAF mandate as passenger aircraft, but military aircraft are not.
 
     Parameters
     ----------
@@ -616,7 +618,7 @@ def fuel_price_with_saf(
     saf_pathway_data = saf_pathway_data.sort_values(by="Cost_USDperkg_current")
 
     # determine average price using cheapest pathways first after meeting synthetic sub-mandate
-    saf_to_assign = SAF_Mandate * total_fuel_kg
+    saf_to_assign = SAF_Mandate * total_fuel_kg / PASSENGER_AC_FUEL_PROPORTION  # scale fuel usage to account for cargo and private jets
     saf_total_cost_USD = 0.0
     if Synth_Mandate > 0:
         kg_from_pathway = Synth_Mandate * total_fuel_kg
