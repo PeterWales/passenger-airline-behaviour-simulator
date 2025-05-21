@@ -1029,6 +1029,8 @@ def reassign_ac_for_profit(
     aircraft_data : pd.DataFrame
     demand_coefficients : dict
     FuelCost_USDperGallon : float
+    year : int
+    allow_lease_changes : bool
 
     Returns
     -------
@@ -1037,14 +1039,16 @@ def reassign_ac_for_profit(
     city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
     """
-    # TODO: - address the issue of the order of airlines giving some an advantage over others
-    #       - check each size class seperately
+    # TODO: - check each size class seperately
     #       - consider moving aircraft to routes with fuel stops
 
     print(f"        Reassigning aircraft...")
     print("        Time: ", datetime.datetime.now(), "\n")
-    # iterate over all airlines
-    for airline_id, airline in airlines.iterrows():
+
+    random_state = np.random.RandomState(year)  # use year as a seed for reproducibility
+    random_order = random_state.permutation(airlines.index)
+    for airline_id in random_order:
+        airline = airlines.loc[airline_id]
         # create dataframe of airline's existing routes and their profit per seat
         rtn_flt_df = reassignment.calc_existing_profits(
             airline_routes[airline_id],
