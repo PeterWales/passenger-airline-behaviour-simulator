@@ -124,6 +124,7 @@ def simulate_base_year(
             airline_fleets,
             city_pair_data,
             aircraft_data,
+            FuelCost_USDperGallon,
         )
 
         # recalculate fuel cost to account for change in fuel consumption
@@ -362,6 +363,7 @@ def run_simulation(
             airline_fleets,
             city_pair_data,
             aircraft_data,
+            FuelCost_USDperGallon,
         )
 
         # write dataframes to files
@@ -466,6 +468,7 @@ def update_fuel_and_sales(
     airline_fleets: list[pd.DataFrame],
     city_pair_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
+    OldFuelCost_USDperGallon: float = -1.0,
 ) -> tuple[float, pd.DataFrame, list[pd.DataFrame]]:
     """
     Calculate the total fuel consumption for the simulation and update the "Fuel_Consumption_kg" column in the city_pair_data DataFrame.
@@ -498,6 +501,7 @@ def update_fuel_and_sales(
     # iterate over all airlines
     for airline_id, _ in airlines.iterrows():
         airline_routes[airline_id]["Tickets_Sold"] = 0
+        airline_routes[airline_id]["Cost_per_Seat_Flight_USD"] = 0.0
         # iterate over all itineraries for the airline
         for al_route_idx, airline_route in airline_routes[airline_id].iterrows():
             city_pair_idx = city_pair_data.index[
@@ -522,6 +526,19 @@ def update_fuel_and_sales(
                 acft = fleet_df.loc[fleet_df["AircraftID"] == acft_id].iloc[0]
                 aircraft_type = aircraft_data.loc[acft["SizeClass"]]
                 total_seats += aircraft_type["Seats"]
+            
+            if OldFuelCost_USDperGallon > 0:
+                annual_itin_cost = aircraft.calc_flight_cost(
+                    airline_route,
+                    fleet_df,
+                    aircraft_data,
+                    city_pair,
+                    airline_route["origin"],
+                    airline_route["destination"],
+                    annual_itin_demand,
+                    OldFuelCost_USDperGallon,
+                )
+                airline_routes[airline_id].at[al_route_idx, "Cost_per_Seat_Flight_USD"] = annual_itin_cost / airline_route["seat_flights_per_year"]
 
             # iterate over all aircraft assigned to itinerary
             for acft_id in planes:
