@@ -1538,6 +1538,10 @@ def reassign_ac_for_profit(
                                 ]
                                 airlines.at[airline_id, "Grounded_acft"].remove(reassign_ac["AircraftID"])
 
+    # update demand for all O-D pairs
+    for idx, city_pair in city_pair_data.iterrows():
+        city_pair_data.loc[idx, "Total_Demand"] = demand.update_od_demand(city_pair)
+    
     return airline_routes, airline_fleets, city_pair_data, city_data
 
 
