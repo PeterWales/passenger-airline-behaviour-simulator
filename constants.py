@@ -15,6 +15,9 @@ MIN_INIT_PLANES_PER_AL = 10  # min initial number of planes assigned to an airli
 MAX_EXPANSION_PLANES = 1  # max number of planes an airline can add in a single year
 MAX_EXPANSION_PROPORTION = 0.10  # max proportion of fleet size that an airline can add in a single year
 PRICE_ELAS_LH_THRESHOLD = 4828032  # 3000 miles in metres
+TGTE_LH_THRESHOLD = 1609344.0  # 1000 miles in metres
+TGTE_SH = 1.12  # short haul total ground track extension multiplier
+TGTE_LH = 1.06  # long haul total ground track extension multiplier
 INCOME_ELAS_THRESHOLDS = {
     "short": 0.0,
     "medium": 1609344.0,

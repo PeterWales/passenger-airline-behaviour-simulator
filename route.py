@@ -5,6 +5,9 @@ from constants import (
     PRICE_ELAS_LH_THRESHOLD,
     INCOME_ELAS_THRESHOLDS,
     GNI_THRESHOLDS,
+    TGTE_LH_THRESHOLD,
+    TGTE_SH,
+    TGTE_LH,
 )
 
 
@@ -72,12 +75,17 @@ def initialise_routes(
             international[idx] = origin["Country"] != destination["Country"]
 
             # calculate great circle distance between origin and destination cities
-            distance[idx] = calc_great_circle_distance(
+            distance_uncorrected = calc_great_circle_distance(
                 origin["Latitude"],
                 origin["Longitude"],
                 destination["Latitude"],
                 destination["Longitude"]
             )
+            # account for routing inefficiencies using average total ground track extension values
+            if distance_uncorrected < TGTE_LH_THRESHOLD:
+                distance[idx] = distance_uncorrected * TGTE_SH
+            else:
+                distance[idx] = distance_uncorrected * TGTE_LH
 
             # store city coordinates to make plotting easier
             origin_lat[idx] = origin["Latitude"]
