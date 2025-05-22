@@ -396,7 +396,7 @@ def choose_fuel_stop(
     fuel_stop = -1
     min_distance = np.inf
     for city_id, city in hub_city_data.iterrows():
-        if not(city_id == origin["CityID"] or city_id == destination["CityID"]):
+        if not(city_id == origin.name or city_id == destination.name):
             fuel_stop, min_distance = test_fuel_stop(
                 fuel_stop,
                 min_distance,
@@ -414,7 +414,7 @@ def choose_fuel_stop(
         # no suitable hub city found, so try again with non-hub cities
         non_hub_city_data = city_data[city_data["GlobalHub"] == 0]
         for city_id, city in non_hub_city_data.iterrows():
-            if not(city_id == origin["CityID"] or city_id == destination["CityID"]):
+            if not(city_id == origin.name or city_id == destination.name):
                 fuel_stop, min_distance = test_fuel_stop(
                     fuel_stop,
                     min_distance,
@@ -463,12 +463,12 @@ def test_fuel_stop(
         ):
             # check that runway and leg distances are suitable for the aircraft
             leg1 = city_pair_data.loc[
-                (city_pair_data["OriginCityID"] == origin["CityID"])
+                (city_pair_data["OriginCityID"] == origin.name)
                 & (city_pair_data["DestinationCityID"] == city_id)
             ]
             leg2 = city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == city_id)
-                & (city_pair_data["DestinationCityID"] == destination["CityID"])
+                & (city_pair_data["DestinationCityID"] == destination.name)
             ]
             if not (leg1.empty or leg2.empty):
                 leg1_distance = leg1["Great_Circle_Distance_m"].values[0]
