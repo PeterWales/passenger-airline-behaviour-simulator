@@ -359,6 +359,7 @@ def choose_fuel_stop(
     aircraft_range: float,
     min_runway_m: float,
     regions: list | None,
+    city_pair_data: pd.DataFrame,
 ) -> int:
     """
     Choose a fuel stop city for a route based on range and runway length requirements.
@@ -395,24 +396,7 @@ def choose_fuel_stop(
     fuel_stop = -1
     min_distance = np.inf
     for city_id, city in hub_city_data.iterrows():
-        fuel_stop, min_distance = test_fuel_stop(
-            fuel_stop,
-            min_distance,
-            city,
-            city_id,
-            midpoint,
-            regions,
-            origin,
-            destination,
-            origin_coords,
-            destination_coords,
-            min_runway_m,
-            aircraft_range,
-        )
-    if fuel_stop == -1:
-        # no suitable hub city found, so try again with non-hub cities
-        non_hub_city_data = city_data[city_data["GlobalHub"] == 0]
-        for city_id, city in non_hub_city_data.iterrows():
+        if not(city_id == origin["CityID"] or city_id == destination["CityID"]):
             fuel_stop, min_distance = test_fuel_stop(
                 fuel_stop,
                 min_distance,
@@ -422,11 +406,28 @@ def choose_fuel_stop(
                 regions,
                 origin,
                 destination,
-                origin_coords,
-                destination_coords,
                 min_runway_m,
                 aircraft_range,
+                city_pair_data,
             )
+    if fuel_stop == -1:
+        # no suitable hub city found, so try again with non-hub cities
+        non_hub_city_data = city_data[city_data["GlobalHub"] == 0]
+        for city_id, city in non_hub_city_data.iterrows():
+            if not(city_id == origin["CityID"] or city_id == destination["CityID"]):
+                fuel_stop, min_distance = test_fuel_stop(
+                    fuel_stop,
+                    min_distance,
+                    city,
+                    city_id,
+                    midpoint,
+                    regions,
+                    origin,
+                    destination,
+                    min_runway_m,
+                    aircraft_range,
+                    city_pair_data,
+                )
     return fuel_stop
 
 
@@ -439,10 +440,9 @@ def test_fuel_stop(
     regions: list | None,
     origin: pd.Series,
     destination: pd.Series,
-    origin_coords: snv.LatLon,
-    destination_coords: snv.LatLon,
     min_runway_m: float,
     aircraft_range: float,
+    city_pair_data: pd.DataFrame,
 ):
     """
     Test a city as a potential fuel stop for a route based on distance and runway length requirements.
@@ -462,13 +462,24 @@ def test_fuel_stop(
             and city["Region"] not in regions
         ):
             # check that runway and leg distances are suitable for the aircraft
-            if (
-                city["LongestRunway_m"] > min_runway_m
-                and origin_coords.distanceTo(city_coords) < aircraft_range
-                and city_coords.distanceTo(destination_coords) < aircraft_range
-            ):
-                fuel_stop = city_id
-                min_distance = distance
+            leg1 = city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == origin["CityID"])
+                & (city_pair_data["DestinationCityID"] == city_id)
+            ]
+            leg2 = city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == city_id)
+                & (city_pair_data["DestinationCityID"] == destination["CityID"])
+            ]
+            if not (leg1.empty or leg2.empty):
+                leg1_distance = leg1["Great_Circle_Distance_m"].values[0]
+                leg2_distance = leg2["Great_Circle_Distance_m"].values[0]
+                if (
+                    city["LongestRunway_m"] > min_runway_m
+                    and leg1_distance < aircraft_range
+                    and leg2_distance < aircraft_range
+                ):
+                    fuel_stop = city_id
+                    min_distance = distance
     return fuel_stop, min_distance
 
 

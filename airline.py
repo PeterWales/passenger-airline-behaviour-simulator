@@ -390,6 +390,7 @@ def initialise_fleet_assignment(
                                     aircraft["LandingDist_m"]
                                 ),
                                 regions,
+                                city_pair_data,
                             )
 
                             if not (fuel_stop == -1):  # -1 if route not possible with a stop for that aircraft
