@@ -200,6 +200,7 @@ def main():
                 city_pair_data,
                 city_data,
                 capacity_flag_list,
+                airlines,
             ) = (
                 airline.initialise_fleet_assignment(
                     airlines,
