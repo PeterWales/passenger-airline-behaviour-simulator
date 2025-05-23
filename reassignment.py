@@ -477,6 +477,17 @@ def find_itin_alternative(
                             )
                         ) / itin_seats
 
+                        # calculate occupancy before adding aircraft
+                        annual_itin_demand = demand.update_itinerary_demand(city_pair, test_itin_out.iloc[0])
+                        tickets_sold_out = min([annual_itin_demand, test_itin_out["seat_flights_per_year"].iloc[0]])
+                        tickets_sold_out = max([0, tickets_sold_out])
+                        annual_itin_demand = demand.update_itinerary_demand(city_pair_in, test_itin_in.iloc[0])
+                        tickets_sold_in = min([annual_itin_demand, test_itin_in["seat_flights_per_year"].iloc[0]])
+                        tickets_sold_in = max([0, tickets_sold_in])
+                        mean_occupancy = (
+                            tickets_sold_out + tickets_sold_in
+                        ) / (test_itin_out["seat_flights_per_year"].iloc[0] + test_itin_in["seat_flights_per_year"].iloc[0])
+
                         # calculate new mean fare for the route after new aircraft assigned
                         old_mean_fare_out = city_pair["Mean_Fare_USD"]
                         old_mean_fare_in = city_pair_in["Mean_Fare_USD"]
@@ -554,17 +565,6 @@ def find_itin_alternative(
                             )
                         ) / itin_seats
 
-                        # calculate occupancy
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair, test_itin_out.iloc[0])
-                        tickets_sold_out = min([annual_itin_demand, test_itin_out["seat_flights_per_year"].iloc[0]])
-                        tickets_sold_out = max([0, tickets_sold_out])
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair_in, test_itin_in.iloc[0])
-                        tickets_sold_in = min([annual_itin_demand, test_itin_in["seat_flights_per_year"].iloc[0]])
-                        tickets_sold_in = max([0, tickets_sold_in])
-                        mean_occupancy = (
-                            tickets_sold_out + tickets_sold_in
-                        ) / (test_itin_out["seat_flights_per_year"].iloc[0] + test_itin_in["seat_flights_per_year"].iloc[0])
-
                         # reset dataframes to avoid mutability issues
                         city_pair["Mean_Fare_USD"] = old_mean_fare_out
                         city_pair_in["Mean_Fare_USD"] = old_mean_fare_in
@@ -581,6 +581,7 @@ def find_itin_alternative(
                         fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
                     else:
                         # airline doesn't already fly this route
+                        mean_occupancy = 1.0  # no occupancy to calculate
                         new_itin_old_profit_per_seat = 0.0
                         fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost and time
                         test_itin_out = {
@@ -663,17 +664,6 @@ def find_itin_alternative(
                                 demand_coefficients,
                             )
                         ) / aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]  # seats on this itinerary are only provided by reassigned aircraft
-
-                        # calculate occupancy
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair, test_itin_out)
-                        tickets_sold_out = min([annual_itin_demand, test_itin_out["seat_flights_per_year"]])
-                        tickets_sold_out = max([0, tickets_sold_out])
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair_in, test_itin_in)
-                        tickets_sold_in = min([annual_itin_demand, test_itin_in["seat_flights_per_year"]])
-                        tickets_sold_in = max([0, tickets_sold_in])
-                        mean_occupancy = (
-                            tickets_sold_out + tickets_sold_in
-                        ) / (test_itin_out["seat_flights_per_year"] + test_itin_in["seat_flights_per_year"])
 
                         # reset dataframes to avoid mutability issues
                         fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = old_ac_flights_per_year
