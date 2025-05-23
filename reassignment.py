@@ -555,15 +555,15 @@ def find_itin_alternative(
                         ) / itin_seats
 
                         # calculate occupancy
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair, test_itin_out)
-                        tickets_sold_out = min([annual_itin_demand, test_itin_out["seat_flights_per_year"]])
+                        annual_itin_demand = demand.update_itinerary_demand(city_pair, test_itin_out.iloc[0])
+                        tickets_sold_out = min([annual_itin_demand, test_itin_out["seat_flights_per_year"].iloc[0]])
                         tickets_sold_out = max([0, tickets_sold_out])
-                        annual_itin_demand = demand.update_itinerary_demand(city_pair_in, test_itin_in)
-                        tickets_sold_in = min([annual_itin_demand, test_itin_in["seat_flights_per_year"]])
+                        annual_itin_demand = demand.update_itinerary_demand(city_pair_in, test_itin_in.iloc[0])
+                        tickets_sold_in = min([annual_itin_demand, test_itin_in["seat_flights_per_year"].iloc[0]])
                         tickets_sold_in = max([0, tickets_sold_in])
                         mean_occupancy = (
                             tickets_sold_out + tickets_sold_in
-                        ) / (test_itin_out["seat_flights_per_year"] + test_itin_in["seat_flights_per_year"])
+                        ) / (test_itin_out["seat_flights_per_year"].iloc[0] + test_itin_in["seat_flights_per_year"].iloc[0])
 
                         # reset dataframes to avoid mutability issues
                         city_pair["Mean_Fare_USD"] = old_mean_fare_out
