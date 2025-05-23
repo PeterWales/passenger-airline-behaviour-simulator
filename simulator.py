@@ -43,6 +43,7 @@ def simulate_base_year(
         airline_routes,
         airline_fleets,
         city_pair_data,
+        city_data,
         aircraft_data,
     )
 
@@ -123,6 +124,7 @@ def simulate_base_year(
             airline_routes,
             airline_fleets,
             city_pair_data,
+            city_data,
             aircraft_data,
             FuelCost_USDperGallon,
         )
@@ -362,6 +364,7 @@ def run_simulation(
             airline_routes,
             airline_fleets,
             city_pair_data,
+            city_data,
             aircraft_data,
             FuelCost_USDperGallon,
         )
@@ -467,6 +470,7 @@ def update_fuel_and_sales(
     airline_routes: list[pd.DataFrame],
     airline_fleets: list[pd.DataFrame],
     city_pair_data: pd.DataFrame,
+    city_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     OldFuelCost_USDperGallon: float = -1.0,
 ) -> tuple[float, pd.DataFrame, list[pd.DataFrame]]:
@@ -533,8 +537,8 @@ def update_fuel_and_sales(
                     fleet_df,
                     aircraft_data,
                     city_pair,
-                    airline_route["origin"],
-                    airline_route["destination"],
+                    city_data.loc[airline_route["origin"]],
+                    city_data.loc[airline_route["destination"]],
                     annual_itin_demand,
                     OldFuelCost_USDperGallon,
                 )
