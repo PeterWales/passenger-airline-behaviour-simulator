@@ -18,11 +18,8 @@ def update_od_demand(
     demand
     """
     # TODO: add input for national taxes
-    fare_factor = 1 + (
-        ((city_pair["Mean_Fare_USD"] - city_pair["Fare_Est"]) / city_pair["Fare_Est"])
-        * city_pair['Price_Elasticity_Route']
-    )
-    # tax_factor = 1 + ((delta_tax / self.mean_fare) * self.price_elasticities["national"])
+    fare_factor = (city_pair["Mean_Fare_USD"] / city_pair["Fare_Est"]) ** city_pair['Price_Elasticity_Route']
+
     demand = math.floor(city_pair["BaseYearODDemandPax_Est"] * fare_factor * city_pair["Static_Demand_Factor"])
     return demand
 

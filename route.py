@@ -321,13 +321,8 @@ def calc_static_demand_factor(
     )
     destination_demand_weight = 1 - origin_demand_weight
     
-    income_factor_origin = 1 + (
-        ((origin_income_USDpercap - origin_base_income_USDpercap) 
-            / origin_base_income_USDpercap) * origin_income_elasticity)
-
-    income_factor_destination = 1 + (
-        ((destination_income_USDpercap - destination_base_income_USDpercap) 
-            / destination_base_income_USDpercap) * destination_income_elasticity)
+    income_factor_origin = (origin_income_USDpercap / origin_base_income_USDpercap) ** origin_income_elasticity
+    income_factor_destination = (destination_income_USDpercap / destination_base_income_USDpercap) ** destination_income_elasticity
 
     # total income factor weighted by population * income
     income_factor = (
@@ -335,13 +330,8 @@ def calc_static_demand_factor(
         + (destination_demand_weight * income_factor_destination)
     )
 
-    population_factor_origin = 1 + (
-        ((origin_population - origin_base_population) 
-            / origin_base_population) * population_elasticity)
-
-    population_factor_destination = 1 + (
-        ((destination_population - destination_base_population) 
-            / destination_base_population) * population_elasticity)
+    population_factor_origin = (origin_population / origin_base_population) ** population_elasticity
+    population_factor_destination = (destination_population / destination_base_population) ** population_elasticity
 
     # total population factor weighted by population * income
     population_factor = (
