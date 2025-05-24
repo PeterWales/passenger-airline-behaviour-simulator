@@ -1005,7 +1005,7 @@ def reassign_ac_to_new_route(
                     (city_pair_data["OriginCityID"] == new_origin)
                     & (city_pair_data["DestinationCityID"] == new_destination),
                     "Seat_Flights_perYear"
-                ]
+                ].iloc[0]
             )
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == new_destination)
@@ -1017,7 +1017,7 @@ def reassign_ac_to_new_route(
                     (city_pair_data["OriginCityID"] == new_destination)
                     & (city_pair_data["DestinationCityID"] == new_origin),
                     "Seat_Flights_perYear"
-                ]
+                ].iloc[0]
             )
 
         else:
