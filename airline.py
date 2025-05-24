@@ -843,14 +843,15 @@ def optimise_fares(
             itin_exp_utility_diff = new_exp_utility - old_exp_utility
             prev_mean_fare = city_pair["New_Mean_Fare_USD"]
             prev_exp_utility_sum = city_pair["New_Exp_Utility_Sum"]
+            new_mean_fare = (
+                (prev_mean_fare * city_pair["Seat_Flights_perYear"])
+                + (itin_fare_diff * itin["seat_flights_per_year"])
+            ) / city_pair["Seat_Flights_perYear"]
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
                 "New_Mean_Fare_USD"
-            ] = (
-                (prev_mean_fare * city_pair["Seat_Flights_perYear"])
-                + (itin_fare_diff * itin["seat_flights_per_year"])
-            ) / city_pair["Seat_Flights_perYear"]
+            ] = max(0.0, new_mean_fare)
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == itin["origin"])
                 & (city_pair_data["DestinationCityID"] == itin["destination"]),
@@ -944,7 +945,7 @@ def itin_profit(
         # update city_pair mean fare (weighted by seats available not seats filled)
         total_revenue = city_pair["Mean_Fare_USD"] * city_pair["Seat_Flights_perYear"]
         total_revenue += ((new_itin_fare - old_itin_fare) * airline_route["seat_flights_per_year"])
-        city_pair["Mean_Fare_USD"] = total_revenue / city_pair["Seat_Flights_perYear"]
+        city_pair["Mean_Fare_USD"] = max(0.0, (total_revenue / city_pair["Seat_Flights_perYear"]))
 
         # update variables that determine itinerary market share
         airline_route["exp_utility"] = demand.calc_exp_utility(

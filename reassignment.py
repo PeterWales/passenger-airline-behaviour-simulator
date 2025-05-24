@@ -232,11 +232,11 @@ def profit_after_removal(
             total_revenue_in = city_pair_in["Mean_Fare_USD"] * city_pair_in["Seat_Flights_perYear"]
             total_revenue_out -= (reassign_itin_out["fare"] * seat_flights_per_year)  # remove revenue from aircraft being reassigned
             total_revenue_in -= (reassign_itin_in["fare"] * seat_flights_per_year)
-            city_pair_out["Mean_Fare_USD"] = total_revenue_out / (remaining_seat_flights_per_year)  # new city pair flights
-            city_pair_in["Mean_Fare_USD"] = total_revenue_in / (remaining_seat_flights_per_year)
+            city_pair_out["Mean_Fare_USD"] = max(0.0, total_revenue_out / (remaining_seat_flights_per_year))  # new city pair flights
+            city_pair_in["Mean_Fare_USD"] = max(0.0, total_revenue_in / (remaining_seat_flights_per_year))
         else:
-            city_pair_out["Mean_Fare_USD"] = city_pair_out["Fare_Est"]
-            city_pair_in["Mean_Fare_USD"] = city_pair_in["Fare_Est"]
+            city_pair_out["Mean_Fare_USD"] = max(0.0, city_pair_out["Fare_Est"])
+            city_pair_in["Mean_Fare_USD"] = max(0.0, city_pair_in["Fare_Est"])
 
         # extract relevant cities
         origin = city_data.loc[reassign_itin_out["origin"]]
@@ -495,8 +495,8 @@ def find_itin_alternative(
                         total_revenue_in = city_pair_in["Mean_Fare_USD"] * city_pair_in["Seat_Flights_perYear"]
                         total_revenue_out += (test_itin_out["fare"].iloc[0] * seat_flights_per_year)  # add revenue from aircraft being reassigned
                         total_revenue_in += (test_itin_in["fare"].iloc[0] * seat_flights_per_year)
-                        city_pair["Mean_Fare_USD"] = total_revenue_out / (city_pair["Seat_Flights_perYear"] + seat_flights_per_year)  # new city pair flights
-                        city_pair_in["Mean_Fare_USD"] = total_revenue_in / (city_pair_in["Seat_Flights_perYear"] + seat_flights_per_year)
+                        city_pair["Mean_Fare_USD"] = max(0.0, total_revenue_out / (city_pair["Seat_Flights_perYear"] + seat_flights_per_year))  # new city pair flights
+                        city_pair_in["Mean_Fare_USD"] = max(0.0, total_revenue_in / (city_pair_in["Seat_Flights_perYear"] + seat_flights_per_year))
 
                         # calculate new profit per seat after new aircraft assigned
                         fleet_data.loc[fleet_data["AircraftID"] == reassign_ac["AircraftID"], "Flights_perYear"] = flights_per_year  # needed for calculating flight cost and time
@@ -890,12 +890,12 @@ def reassign_ac_to_new_route(
                 (city_pair_data["OriginCityID"] == reassign_itin_out["origin"])
                 & (city_pair_data["DestinationCityID"] == reassign_itin_out["destination"]),
                 "Mean_Fare_USD"
-            ] = total_revenue_out / (old_city_pair_out["Seat_Flights_perYear"] - subtract_seat_flights_per_year)
+            ] = max(0.0, total_revenue_out / (old_city_pair_out["Seat_Flights_perYear"] - subtract_seat_flights_per_year))
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == reassign_itin_in["origin"])
                 & (city_pair_data["DestinationCityID"] == reassign_itin_in["destination"]),
                 "Mean_Fare_USD"
-            ] = total_revenue_in / (old_city_pair_in["Seat_Flights_perYear"] - subtract_seat_flights_per_year)
+            ] = max(0.0, total_revenue_in / (old_city_pair_in["Seat_Flights_perYear"] - subtract_seat_flights_per_year))
         else:
             airline_routes[airline_id].loc[out_reassign_mask, "exp_utility"] = 0.0
             airline_routes[airline_id].loc[in_reassign_mask, "exp_utility"] = 0.0
@@ -999,20 +999,26 @@ def reassign_ac_to_new_route(
                 (city_pair_data["OriginCityID"] == new_origin)
                 & (city_pair_data["DestinationCityID"] == new_destination),
                 "Mean_Fare_USD"
-            ] = total_revenue_out / city_pair_data.loc[
-                (city_pair_data["OriginCityID"] == new_origin)
-                & (city_pair_data["DestinationCityID"] == new_destination),
-                "Seat_Flights_perYear"
-            ]
+            ] = max(
+                0.0,
+                total_revenue_out / city_pair_data.loc[
+                    (city_pair_data["OriginCityID"] == new_origin)
+                    & (city_pair_data["DestinationCityID"] == new_destination),
+                    "Seat_Flights_perYear"
+                ]
+            )
             city_pair_data.loc[
                 (city_pair_data["OriginCityID"] == new_destination)
                 & (city_pair_data["DestinationCityID"] == new_origin),
                 "Mean_Fare_USD"
-            ] = total_revenue_in / city_pair_data.loc[
-                (city_pair_data["OriginCityID"] == new_destination)
-                & (city_pair_data["DestinationCityID"] == new_origin),
-                "Seat_Flights_perYear"
-            ]
+            ] = max(
+                0.0,
+                total_revenue_in / city_pair_data.loc[
+                    (city_pair_data["OriginCityID"] == new_destination)
+                    & (city_pair_data["DestinationCityID"] == new_origin),
+                    "Seat_Flights_perYear"
+                ]
+            )
 
         else:
             # airline doesn't already fly this route
