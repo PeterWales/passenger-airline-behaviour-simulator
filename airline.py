@@ -1005,6 +1005,7 @@ def reassign_ac_for_profit(
     demand_coefficients: dict[str, float],
     FuelCost_USDperGallon: float,
     year: int,
+    unlimited_capacity: bool,
     allow_lease_changes: bool = True,
 ) -> tuple[
     list[pd.DataFrame],
@@ -1122,6 +1123,7 @@ def reassign_ac_for_profit(
                 FuelCost_USDperGallon,
                 reassign_new_profit_per_seat,
                 reassign_old_profit_per_seat,
+                unlimited_capacity,
             )
 
             # assign the aircraft to the most profitable alternative if beneficial
@@ -1384,6 +1386,7 @@ def reassign_ac_for_profit(
                         FuelCost_USDperGallon,
                         reassign_new_profit_per_seat,
                         reassign_old_profit_per_seat,
+                        unlimited_capacity,
                     )
 
                     # assign the aircraft to the most profitable alternative if not loss-making
@@ -1494,6 +1497,7 @@ def reassign_ac_for_profit(
                                 FuelCost_USDperGallon,
                                 reassign_new_profit_per_seat,
                                 reassign_old_profit_per_seat,
+                                unlimited_capacity,
                             )
 
                             # assign the aircraft to the most profitable alternative if not loss-making

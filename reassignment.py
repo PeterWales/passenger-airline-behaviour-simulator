@@ -299,6 +299,7 @@ def find_itin_alternative(
     FuelCost_USDperGallon: float,
     reassign_new_profit_per_seat: float,
     reassign_old_profit_per_seat: float,
+    unlimited_capacity: bool,
 ) -> tuple[float, int, int, int, int]:
     """
     Find an alternative itinerary for an aircraft being reassigned, based on the profit lost by
@@ -331,6 +332,8 @@ def find_itin_alternative(
         New profit per seat for the airline itinerary that the aircraft is being removed from
     reassign_old_profit_per_seat : float
         Old profit per seat for the airline itinerary that the aircraft is being removed from
+    unlimited_capacity : bool
+        True if airports have unlimited capacity, False if they have limited capacity
     
     Returns
     -------
@@ -396,9 +399,12 @@ def find_itin_alternative(
                 origin_movt_mult = 1.0 + city_data.loc[origin_id, "Movts_Outside_Proportion"]
                 destination_movt_mult = 1.0 + city_data.loc[destination_id, "Movts_Outside_Proportion"]
                 if (
-                    flights_per_year > 0
-                    and city_data.loc[origin_id, "Movts_perHr"] + (2.0*origin_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
-                    and city_data.loc[destination_id, "Movts_perHr"] + (2.0*destination_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
+                    flights_per_year > 0 and (
+                        unlimited_capacity or (
+                            city_data.loc[origin_id, "Movts_perHr"] + (2.0*origin_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[origin_id, "Capacity_MovtsPerHr"]
+                            and city_data.loc[destination_id, "Movts_perHr"] + (2.0*destination_movt_mult*flights_per_year/OP_HRS_PER_YEAR) <= city_data.loc[destination_id, "Capacity_MovtsPerHr"]
+                        )
+                    )
                 ):
                     # new itinerary is possible
                     old_ac_flights_per_year = fleet_data.loc[

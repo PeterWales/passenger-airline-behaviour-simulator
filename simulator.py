@@ -94,6 +94,10 @@ def simulate_base_year(
         )
 
         # allow airlines to reassign aircraft to different routes (no addition or removal of aircraft)
+        if run_parameters["LimitCapacity"] == "y" or run_parameters["LimitCapacity"] == "Y":
+            unlimited_capacity = False
+        else:
+            unlimited_capacity = True
         airline_routes, airline_fleets, city_pair_data, city_data = al.reassign_ac_for_profit(
             airlines,
             airline_routes,
@@ -105,6 +109,7 @@ def simulate_base_year(
             demand_coefficients,
             FuelCost_USDperGallon,
             year,
+            unlimited_capacity,
             allow_lease_changes=False,
         )
 
@@ -276,6 +281,11 @@ def run_simulation(
         with open(os.path.join(annual_cache_path, f"total_fuel_kg_{start_year - 1}.pkl"), "rb") as f:
             total_fuel_kg = pickle.load(f)
 
+    if run_parameters["LimitCapacity"] == "y" or run_parameters["LimitCapacity"] == "Y":
+        unlimited_capacity = False
+    else:
+        unlimited_capacity = True
+
     # iterate over desired years
     for year in range(start_year, end_year + 1):
         print(f"\n    Simulating year {year}...")
@@ -345,6 +355,7 @@ def run_simulation(
             demand_coefficients,
             FuelCost_USDperGallon,
             year,
+            unlimited_capacity,
             allow_lease_changes=True,
         )
 
