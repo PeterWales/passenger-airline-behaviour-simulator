@@ -473,29 +473,6 @@ def initialise_fleet_assignment(
             fleet_df,
         )
 
-        # ground any aircraft are left in aircraft_avail
-        for new_aircraft_size, n_new_aircraft in enumerate(aircraft_avail):
-            aircraft = aircraft_data.loc[new_aircraft_size]
-            for _ in range(n_new_aircraft):
-                if len(fleet_df) == 0:
-                    new_ac_id = 0
-                else:
-                    new_ac_id = fleet_df["AircraftID"].max() + 1
-                new_ac_dict = {
-                    "AircraftID": int(new_ac_id),
-                    "SizeClass": int(new_aircraft_size),
-                    "Age_years": 0,
-                    "Lease_USDperMonth": aircraft["LeaseRateNew_USDPerMonth"],
-                    "BreguetFactor": (aircraft["Breguet_gradient"] * year) + aircraft["Breguet_intercept"],
-                    "RouteOrigin": -1,
-                    "RouteDestination": -1,
-                    "FuelStop": -1,
-                    "Flights_perYear": 0,
-                }
-                new_ac_df = pd.DataFrame(new_ac_dict, index=[0])
-                fleet_df = pd.concat([fleet_df, new_ac_df], ignore_index=True)
-                airlines.at[airline_id, "Grounded_acft"].append(new_ac_id)
-
         airline_fleets[airline_id] = fleet_df
 
     return airline_fleets, airline_routes, city_pair_data, city_data, capacity_flag_list, airlines
