@@ -670,11 +670,14 @@ def fuel_price_with_saf(
         saf_to_assign -= kg_from_pathway
         saf_total_cost_USD += kg_from_pathway * pathway["Cost_USDperkg_current"]
 
+    # adjust SAF total cost back to passenger aircraft only
+    saf_passenger_cost_USD = saf_total_cost_USD * PASSENGER_AC_FUEL_PROPORTION
+
     # include cost of conventional jet fuel
     cjf_kg = (1-SAF_Mandate) * total_fuel_kg
     cjf_total_cost_USD = cjf_kg * FUEL_GALLONS_PER_KG * CJFCost_USDperGallon
 
-    FuelCost_USDperkg = (saf_total_cost_USD + cjf_total_cost_USD) / total_fuel_kg
+    FuelCost_USDperkg = (saf_passenger_cost_USD + cjf_total_cost_USD) / total_fuel_kg
     FuelCost_USDperGallon = FuelCost_USDperkg / FUEL_GALLONS_PER_KG
 
     return FuelCost_USDperGallon
