@@ -203,7 +203,6 @@ def initialise_fleet_assignment(
     airlines : pd.DataFrame
     """
     # TODO: enable EU airlines to operate routes between all EU countries
-    # TODO: move aircraft creation and following lines into a function to avoid code duplication
 
     n_airlines = len(airlines)
 
@@ -291,9 +290,9 @@ def initialise_fleet_assignment(
         flights_per_year_list = []
         capacity_flag_list = []
 
-        # assign aircraft seat capacity by base demand starting with the largest aircraft on the longest routes
-        distances.sort(key=lambda x: x[2], reverse=True)
-        aircraft_data = aircraft_data.sort_values(by="Seats", ascending=False)
+        # assign aircraft seat capacity by base demand starting with the smallest aircraft on the shortest routes
+        distances.sort(key=lambda x: x[2], reverse=False)
+        aircraft_data = aircraft_data.sort_values(by="Seats", ascending=True)
         aircraft_avail = airline["n_Aircraft"].copy()
         aircraft_id = -1
         for origin_id, destination_id, distance, route_RPKs in distances:
