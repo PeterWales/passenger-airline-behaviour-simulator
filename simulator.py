@@ -13,6 +13,7 @@ from constants import (
     FUEL_ENERGY_MJ_KG,
     FUEL_GALLONS_PER_KG,
     PASSENGER_AC_FUEL_PROPORTION,
+    SAF_MARKUP,
 )
 
 
@@ -670,8 +671,8 @@ def fuel_price_with_saf(
         saf_to_assign -= kg_from_pathway
         saf_total_cost_USD += kg_from_pathway * pathway["Cost_USDperkg_current"]
 
-    # adjust SAF total cost back to passenger aircraft only
-    saf_passenger_cost_USD = saf_total_cost_USD * PASSENGER_AC_FUEL_PROPORTION
+    # adjust SAF total cost back to passenger aircraft only, and account for markup
+    saf_passenger_cost_USD = (saf_total_cost_USD * PASSENGER_AC_FUEL_PROPORTION) * (1 + SAF_MARKUP)
 
     # include cost of conventional jet fuel
     cjf_kg = (1-SAF_Mandate) * total_fuel_kg
