@@ -393,6 +393,8 @@ def calc_flight_cost(
     destination: pd.Series,
     annual_itin_demand: int,
     FuelCost_USDperGallon: float,
+    city_data: pd.DataFrame,
+    city_pair_data: pd.DataFrame,
 ) -> float:
     planes = airline_route["aircraft_ids"]
 
@@ -414,13 +416,39 @@ def calc_flight_cost(
         pax = min([pax_perflt_share, aircraft_type["Seats"]])
         pax = max([pax, 0])
 
-        cost_perflt = (
-            calc_op_cost(aircraft_type, city_pair, origin, destination)
-            + calc_landing_fee(city_pair, destination, int(aircraft["SizeClass"]), pax)
-            + calc_fuel_cost(aircraft_type, aircraft, city_pair, pax, FuelCost_USDperGallon)
-            + calc_lease_cost(aircraft)
-        )
-        annual_cost += cost_perflt * aircraft["Flights_perYear"]
+        if airline_route["fuel_stop"] == -1:
+            # no fuel stop
+            cost_perflt = (
+                calc_op_cost(aircraft_type, city_pair, origin, destination)
+                + calc_landing_fee(city_pair, destination, int(aircraft["SizeClass"]), pax)
+                + calc_fuel_cost(aircraft_type, aircraft, city_pair, pax, FuelCost_USDperGallon)
+                + (calc_lease_cost(aircraft)/2)  # divide by 2 because this gives cost per return flight and one-way cost is required
+            )
+            annual_cost += cost_perflt * aircraft["Flights_perYear"]
+        else:
+            # includes fuel stop
+            fuel_stop_series = city_data.loc[airline_route["fuel_stop"]]
+            leg1 = city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == origin.name)
+                & (city_pair_data["DestinationCityID"] == airline_route["fuel_stop"])
+            ].iloc[0]
+            leg2 = city_pair_data.loc[
+                (city_pair_data["OriginCityID"] == airline_route["fuel_stop"])
+                & (city_pair_data["DestinationCityID"] == destination.name)
+            ].iloc[0]
+            cost_leg1 = (
+                calc_op_cost(aircraft_type, leg1, origin, fuel_stop_series)
+                + calc_landing_fee(leg1, fuel_stop_series, int(aircraft["SizeClass"]), pax)
+                + calc_fuel_cost(aircraft_type, aircraft, leg1, pax, FuelCost_USDperGallon)
+                + (calc_lease_cost(aircraft)/4)  # divide by 4 because this gives cost per return flight and one leg cost is required
+            )
+            cost_leg2 = (
+                calc_op_cost(aircraft_type, leg2, fuel_stop_series, destination)
+                + calc_landing_fee(leg2, destination, int(aircraft["SizeClass"]), pax)
+                + calc_fuel_cost(aircraft_type, aircraft, leg2, pax, FuelCost_USDperGallon)
+                + (calc_lease_cost(aircraft)/4)  # divide by 4 because this gives cost per return flight and one leg cost is required
+            )
+            annual_cost += (cost_leg1 + cost_leg2) * aircraft["Flights_perYear"]
     return annual_cost
 
 
@@ -431,15 +459,17 @@ def annual_update(
     year_entering: int,
 ) -> list[pd.DataFrame]:
     # TODO: when new ac added, check whether efficiency improvement negates the need for a fuel stop and update route appropriately
-    for airline_id, airline in airlines.iterrows():
-        for _, ac in airline_fleets[airline_id].iterrows():
+    for airline_id, _ in airlines.iterrows():
+        fleet_df = airline_fleets[airline_id]
+        for idx in fleet_df.index:
+            ac = fleet_df.loc[idx]
             ac_type = aircraft_data.loc[ac["SizeClass"]]
             if ac["Age_years"] == ac_type["RetirementAge_years"]:
                 # retire aircraft and replace with a new one of the same type
-                ac["Age_years"] = 0
-                ac["Lease_USDperMonth"] = ac_type["LeaseRateNew_USDPerMonth"]
-                ac["BreguetFactor"] = (ac_type["Breguet_gradient"] * year_entering) + ac_type["Breguet_intercept"]
+                fleet_df.at[idx, "Age_years"] = 0
+                fleet_df.at[idx, "Lease_USDperMonth"] = ac_type["LeaseRateNew_USDPerMonth"]
+                fleet_df.at[idx, "BreguetFactor"] = (ac_type["Breguet_gradient"] * year_entering) + ac_type["Breguet_intercept"]
             else:
-                ac["Age_years"] += 1
-                ac["Lease_USDperMonth"] *= ac_type["LeaseRateAnnualMultiplier"]
+                fleet_df.at[idx, "Age_years"] = ac["Age_years"] + 1
+                fleet_df.at[idx, "Lease_USDperMonth"] = ac["Lease_USDperMonth"] * ac_type["LeaseRateAnnualMultiplier"]
     return airline_fleets

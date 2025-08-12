@@ -877,6 +877,8 @@ def maximise_itin_profit(
             aircraft_data,
             FuelCost_USDperGallon,
             demand_coefficients,
+            city_data,
+            city_pair_data,
             new_itin_fare=fare[0],
         )
     
@@ -904,6 +906,8 @@ def itin_profit(
     aircraft_data: pd.DataFrame,
     FuelCost_USDperGallon: float,
     demand_coefficients: dict[str, float],
+    city_data,
+    city_pair_data,
     new_itin_fare: float | None = None,  # new airline-specific itinerary fare to test
 ) -> float:
     """
@@ -956,6 +960,8 @@ def itin_profit(
         destination,
         tickets_sold,
         FuelCost_USDperGallon,
+        city_data,
+        city_pair_data,
     )  # note depends on number of seats sold due to weight
     annual_itin_profit = annual_itin_revenue - annual_itin_cost
 

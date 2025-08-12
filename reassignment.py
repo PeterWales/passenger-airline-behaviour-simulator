@@ -95,6 +95,8 @@ def calc_existing_profits(
                     aircraft_data,
                     FuelCost_USDperGallon,
                     demand_coefficients,
+                    city_data,
+                    city_pair_data,
                 ) + al.itin_profit(
                     in_itin,
                     city_pair_in,
@@ -104,6 +106,8 @@ def calc_existing_profits(
                     aircraft_data,
                     FuelCost_USDperGallon,
                     demand_coefficients,
+                    city_data,
+                    city_pair_data,
                 )
             ) / itin_seats
         )
@@ -256,6 +260,8 @@ def profit_after_removal(
                 aircraft_data,
                 FuelCost_USDperGallon,
                 demand_coefficients,
+                city_data,
+                city_pair_data,
             ) + al.itin_profit(
                 reassign_itin_in,
                 city_pair_in,
@@ -265,6 +271,8 @@ def profit_after_removal(
                 aircraft_data,
                 FuelCost_USDperGallon,
                 demand_coefficients,
+                city_data,
+                city_pair_data,
             )
         ) / itin_seats
 
@@ -470,6 +478,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             ) + al.itin_profit(
                                 test_itin_in.iloc[0],
                                 city_pair_in,
@@ -479,6 +489,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             )
                         ) / itin_seats
 
@@ -547,6 +559,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             ) + al.itin_profit(
                                 test_itin_in.iloc[0],
                                 city_pair_in,
@@ -556,6 +570,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             )
                         ) / itin_seats
 
@@ -646,6 +662,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             ) + al.itin_profit(
                                 test_itin_in,
                                 city_pair_in,
@@ -655,6 +673,8 @@ def find_itin_alternative(
                                 aircraft_data,
                                 FuelCost_USDperGallon,
                                 demand_coefficients,
+                                city_data,
+                                city_pair_data,
                             )
                         ) / aircraft_data.loc[reassign_ac["SizeClass"], "Seats"]  # seats on this itinerary are only provided by reassigned aircraft
 
@@ -1265,6 +1285,8 @@ def update_profit_tracker(
                     aircraft_data,
                     FuelCost_USDperGallon,
                     demand_coefficients,
+                    city_data,
+                    city_pair_data,
                 ) + al.itin_profit(
                     updated_reassign_itin_in.iloc[0],
                     updated_reassign_city_pair_in,
@@ -1274,6 +1296,8 @@ def update_profit_tracker(
                     aircraft_data,
                     FuelCost_USDperGallon,
                     demand_coefficients,
+                    city_data,
+                    city_pair_data,
                 )
             ) / itin_seats
 
@@ -1323,6 +1347,8 @@ def update_profit_tracker(
                 aircraft_data,
                 FuelCost_USDperGallon,
                 demand_coefficients,
+                city_data,
+                city_pair_data,
             ) + al.itin_profit(
                 updated_new_itin_in.iloc[0],
                 updated_city_pair_in,
@@ -1332,6 +1358,8 @@ def update_profit_tracker(
                 aircraft_data,
                 FuelCost_USDperGallon,
                 demand_coefficients,
+                city_data,
+                city_pair_data,
             )
         ) / itin_seats
 

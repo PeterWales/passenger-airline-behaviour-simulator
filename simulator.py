@@ -553,6 +553,8 @@ def update_fuel_and_sales(
                     city_data.loc[airline_route["destination"]],
                     annual_itin_demand,
                     OldFuelCost_USDperGallon,
+                    city_data,
+                    city_pair_data,
                 )
                 airline_routes[airline_id].at[al_route_idx, "Cost_per_Seat_Flight_USD"] = annual_itin_cost / airline_route["seat_flights_per_year"]
 
