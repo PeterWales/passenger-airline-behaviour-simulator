@@ -11,7 +11,19 @@ from constants import (
 
 def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
     """
-    Calculate an approximate max range of each aircraft type in m including reserve fuel with 80% of max payload
+    Calculate an approximate max range of each aircraft type in metres using the Breguet range equation
+    Aircraft is considered to land with enough reserve fuel for a diversion of distance DIVERSION_DIST_METRES and loiter of time LOITER_T_SEC, set in constants.py
+    Calculated with payload equal to MAX_RANGE_PAYLOAD_PROPORTION of the aircraft's maximum payload, set in constants.py
+
+    Parameters
+    ----------
+    aircraft_data : pd.DataFrame
+    calendar_year : int
+
+    Returns
+    -------
+    ranges : list
+        List of max ranges for each aircraft type in metres
     """
     # TODO: improve loiter fuel usage calculation
 
@@ -37,7 +49,7 @@ def calc_ranges(aircraft_data: pd.DataFrame, calendar_year: int) -> list:
             loiter_distance_m / breguet_factor
         )
 
-        # calculate weight before 100NM diversion using Breguet range equation
+        # calculate weight before diversion using Breguet range equation
         diversion_weight_kg = loiter_weight_kg * math.exp(
             DIVERSION_DIST_METRES / breguet_factor
         )
@@ -68,6 +80,22 @@ def calc_itin_time(
 ) -> float:
     """
     Calculate the time taken to complete a given itinerary (one-way)
+    Average time for all different aircraft which an airline has assigned to the specified itinerary
+    Includes mean turnaround time at one end, and taxi from the gate at origin and taxi to the gate at destination
+    If a fuel stop is required, also includes turnaround time at the fuel stop and taxi in and out at the fuel stop
+
+    Parameters
+    ----------
+    itinerary : pd.Series
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    fleet_data : pd.DataFrame
+
+    Returns
+    -------
+    itin_time_hrs : float
+        Time taken to complete the itinerary in hours
     """
     fuel_stop_id = itinerary["fuel_stop"]
     origin_id = itinerary["origin"]
@@ -86,6 +114,7 @@ def calc_itin_time(
     mean_turnaround = turnaround_sum / n_ac
 
     if fuel_stop_id == -1:
+        # no fuel stop
         route = city_pair_data.loc[
             (city_pair_data["OriginCityID"] == origin_id)
             & (city_pair_data["DestinationCityID"] == destination_id)
@@ -101,6 +130,7 @@ def calc_itin_time(
         )
 
     else:
+        # includes fuel stop
         leg1 = city_pair_data.loc[
             (city_pair_data["OriginCityID"] == origin_id)
             & (city_pair_data["DestinationCityID"] == fuel_stop_id)
@@ -141,7 +171,10 @@ def calc_flights_per_year(
     fuel_stop_id: int
 ) -> int:
     """
-    Calculate the number of return flights per year the aircraft can fly on its specified route
+    Calculate the max number of return flights per year the aircraft can fly on its specified route
+    Consider a representative number of hours per day when airports have night flight restrictions, set by CURFEW_HOURS in constants.py
+    If a leg of the route is longer than CURFEW_HOURS, assume the aircraft can stay airborne for the whole curfew and is therefore not affected by it
+    Otherwise, the aircraft must be grounded for the whole curfew period every day
 
     Parameters
     ----------
@@ -242,8 +275,8 @@ def calc_fuel_consumption(
     pax: int,
 ) -> float:
     """
-    Calculate fuel consumption for a given route and aircraft type
-    Loiter and diversion fuel is assumed to be carried but not used
+    Calculate fuel consumption for a given leg (one-way), aircraft type and number of passengers carried, using the Breguet range equation
+    Aircraft is considered to land with enough reserve fuel for a diversion of distance DIVERSION_DIST_METRES and loiter of time LOITER_T_SEC, set in constants.py
 
     Parameters
     ----------
@@ -298,7 +331,7 @@ def calc_fuel_cost(
     FuelCost_USDperGallon: float
 ) -> float:
     """
-    Calculate fuel cost using fuel consumption and fuel cost per gallon
+    Calculate fuel cost for a particular aircraft on a particular leg (one-way)
 
     Parameters
     ----------
@@ -324,7 +357,20 @@ def calc_landing_fee(
     pax: int,
 ) -> float:
     """
-    Calculate airport fee per landing with a given flight type, aircraft type and number of passengers
+    Calculate airport fee per landing with a given destination, flight type, aircraft type and number of passengers
+
+    Parameters
+    ----------
+    city_pair : pd.series
+    destination : pd.series
+    aircraft_size : int
+    pax : int
+        Number of passengers carried
+
+    Returns
+    -------
+    fee_perflt : float
+        Total landing fee charged for the aircraft and passengers
     """
     if city_pair["International"]:
         flight_type = "International"
@@ -344,7 +390,19 @@ def calc_op_cost(
     destination: pd.Series,
 ) -> float:
     """
-    Calculate operational and crew cost per flight
+    Estimate operational and crew cost per leg (one-way)
+
+    Parameters
+    ----------
+    aircraft : pd.series
+    city_pair : pd.series
+    origin : pd.series
+    destination : pd.series
+
+    Returns
+    -------
+    op_cost_perflt : float
+        Total operational cost for the leg including pilots, cabin crew and other operational costs
     """
     # TODO: define magic numbers as constants
     flight_time_hrs = (city_pair["Great_Circle_Distance_m"] / aircraft["CruiseV_ms"]) / 3600.0
@@ -376,7 +434,16 @@ def calc_op_cost(
 
 def calc_lease_cost(aircraft: pd.Series) -> float:
     """
-    Calculate the lease cost per flight
+    Calculate the lease cost of an aircraft attributed to each return journey
+
+    Parameters
+    ----------
+    aircraft : pd.series
+
+    Returns
+    -------
+    lease_cost_perflt : float
+        Annual lease divided by number of return journeys per year
     """
     # note aircraft["FlightsPerYear"] is number of return journeys => equal to number of outbound flights
     lease_cost_perflt = float(aircraft["Lease_USDperMonth"]) * 12.0 / aircraft["Flights_perYear"]
@@ -396,6 +463,28 @@ def calc_flight_cost(
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
 ) -> float:
+    """
+    Calculate the total cost of operating an itinerary (one-way) for an airline, given the aircraft assigned to the route and the annual demand
+    This includes the cost of operating each aircraft on the route, including fuel, landing fees, operational costs and lease costs
+
+    Parameters
+    ----------
+    airline_route : pd.Series
+    fleet_df : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    city_pair : pd.Series
+    origin : pd.Series
+    destination : pd.Series
+    annual_itin_demand : int
+    FuelCost_USDperGallon : float
+    city_dat a: pd.DataFrame
+    city_pair_data : pd.DataFrame
+
+    Returns
+    -------
+    annual_cost : float
+        Total annual cost to an airline of running an itinerary (one-way)
+    """
     planes = airline_route["aircraft_ids"]
 
     # calculate total seats for all aircraft on route
@@ -458,6 +547,23 @@ def annual_update(
     aircraft_data: pd.DataFrame,
     year_entering: int,
 ) -> list[pd.DataFrame]:
+    """
+    Update lease rate for all aircraft as they get a year older
+    Updates airline_fleets in-place
+    Retire aircraft that have reached their retirement age and replace with a new equivalent
+
+    Parameters
+    ----------
+    airlines : pd.DataFrame
+    airline_fleets : list[pd.DataFrame]
+    aircraft_data : pd.DataFrame
+    year_entering : int
+        Calendar year that simulation is entering
+
+    Returns
+    -------
+    airline_fleets : list[pd.DataFrame]
+    """
     # TODO: when new ac added, check whether efficiency improvement negates the need for a fuel stop and update route appropriately
     for airline_id, _ in airlines.iterrows():
         fleet_df = airline_fleets[airline_id]
