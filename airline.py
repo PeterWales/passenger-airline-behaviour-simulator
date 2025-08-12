@@ -40,6 +40,7 @@ def initialise_airlines(
     Returns
     -------
     airlines : pd.DataFrame
+        Dataframe of airline data where each row is a different airline
     """
     if ("CensusAsiaPacific" in fleet_data.columns) and ("CensusMiddleEast" in fleet_data.columns):
         # 2019 census format
@@ -175,23 +176,19 @@ def initialise_fleet_assignment(
     Parameters
     ----------
     airlines : pd.DataFrame
-        dataframe containing airline data
     city_pair_data : pd.DataFrame
-        dataframe containing route data
     city_data : pd.DataFrame
-        dataframe containing city data
     aircraft_data : pd.DataFrame
-        dataframe containing aircraft data
     city_lookup : list
-        list of lists of city IDs by country code
+        List of lists of city IDs by country code
     randomGen : np.random.Generator
-        random number generator
+        Random number generator
     year : int
-        calendar year
+        Simulation current calendar year
     demand_coefficients : dict
-        dictionary of demand coefficients
+        Dictionary of demand coefficients
     regions : list | None
-        list of regions to include in the simulation. If None, all regions are included.
+        List of regions to include in the simulation. If None, all regions are included.
     
     Returns
     -------
@@ -504,7 +501,91 @@ def create_aircraft(
     capacity_flag_list: list,
     regions: list | None,
     airlines: pd.DataFrame,
-):
+) -> tuple[
+    list,
+    list,
+    list,
+    list,
+    list,
+    list,
+    list,
+    list,
+    list,
+    pd.DataFrame,
+    pd.DataFrame,
+    list[pd.DataFrame],
+    list,
+    pd.DataFrame,
+]:
+    """
+    Generate an aircraft for fleet assignment initialisation
+
+    If route is entirely within simulated region:
+        Appends values for new aircraft to:
+            flights_per_year_list
+            aircraft_id_list
+            aircraft_size_list
+            aircraft_age_list
+            current_lease_list
+            breguet_factor_list
+            origin_id_list
+            destination_id_list
+            fuel_stop_list
+        Edits city_data in-place to account for additional aircraft movements, and adds city to capacity_flag_list if capacity exceeded
+        Edits city_pair_data in-place to account for additional seat-flights
+        Adds new row to airline_routes if airline does not already fly this route, otherwise edits existing row
+    If route is partially in simulated region:
+        Edits city_data in-place to account for additional aircraft movements, and adds city to capacity_flag_list if capacity exceeded
+        Aircraft is disregarded
+    If route is entirely outside simulated region:
+        Aircraft is disregarded
+
+    Parameters
+    ----------
+    aircraft_id_list : list
+    aircraft_id : int
+    aircraft_size_list : list
+    aircraft_size : int
+    aircraft_age_list : list
+    randomGen : np.random.Generator
+    aircraft : pd.Series
+    current_lease_list : list
+    breguet_factor_list : list
+    year : int
+    origin_id_list : list
+    origin_id : int
+    destination_id_list : list
+    destination_id : int
+    fuel_stop_list : list
+    fuel_stop : int
+    flights_per_year_list : list
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    airline_routes : list[pd.DataFrame]
+    airline_id : int
+    outbound_route : pd.Series
+    inbound_route : pd.Series
+    capacity_flag_list : list
+    regions : list | None
+    airlines : pd.DataFrame
+
+    Returns
+    -------
+    aircraft_id_list : list
+    aircraft_size_list : list
+    aircraft_age_list : list
+    current_lease_list : list
+    breguet_factor_list : list
+    origin_id_list : list
+    destination_id_list :list 
+    fuel_stop_list : list
+    flights_per_year_list : list
+    city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    airline_routes : list[pd.DataFrame],
+    capacity_flag_list : list
+    airlines : pd.DataFrame
+    """
     if fuel_stop == -1:
         fuel_stop_series = None
     else:
@@ -711,7 +792,28 @@ def recalculate_exp_utility(
     city_pair_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     fleet_data: pd.DataFrame,
-) -> list[pd.DataFrame]:
+) -> tuple[
+    list[pd.DataFrame],
+    pd.DataFrame,
+]:
+    """
+    Recalculate exp(utility) for all itineraries for all airlines
+
+    Parameters
+    ----------
+    airline_routes : list[pd.DataFrame]
+    airline_id : int
+    demand_coefficients : dict[str, float]
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    fleet_data : pd.DataFrame
+
+    Returns
+    -------
+    airline_routes : list[pd.DataFrame]
+    city_pair_data : pd.DataFrame
+    """
     for itin_idx, itin in airline_routes[airline_id].iterrows():
         fare = airline_routes[airline_id].loc[itin_idx, "fare"]
         flights_per_year = airline_routes[airline_id].loc[itin_idx, "flights_per_year"]
@@ -760,6 +862,7 @@ def optimise_fares(
     """
     Airlines adjust their fares to attempt to maximise profit, assuming no change in flight schedules.
     Airlines have no knowledge of the choices of other airlines.
+    airline_routes and city_pair_data are updated in-place to account for the new fares
 
     Parameters
     ----------
@@ -771,6 +874,7 @@ def optimise_fares(
     aircraft_data : pd.DataFrame
     max_fare : float
     FuelCost_USDperGallon : float
+    demand_coefficients : dict[str, float]
 
     Returns
     -------
@@ -855,7 +959,24 @@ def maximise_itin_profit(
     demand_coefficients: dict[str, float],
 ) -> float:
     """
-    Maximise profit for a given itinerary by adjusting fare
+    Find the optimal fare for maximising an airline's profit on a specific itinerary, with all other factors staying constant
+    Uses skopt.gp_minimize
+
+    Parameters
+    ----------
+    airline_route : pd.Series
+    fleet_df : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    max_fare : float
+    FuelCost_USDperGallon : float
+    demand_coefficients : dict[str, float]
+
+    Returns
+    -------
+    optimal_fare : float
+        Optimal fare for maximising profit on this itinerary, assuming no change to any other itinerary
     """
     origin = city_data.loc[airline_route["origin"]]
     destination = city_data.loc[airline_route["destination"]]
@@ -906,12 +1027,32 @@ def itin_profit(
     aircraft_data: pd.DataFrame,
     FuelCost_USDperGallon: float,
     demand_coefficients: dict[str, float],
-    city_data,
-    city_pair_data,
-    new_itin_fare: float | None = None,  # new airline-specific itinerary fare to test
+    city_data: pd.DataFrame,
+    city_pair_data: pd.DataFrame,
+    new_itin_fare: float | None = None,
 ) -> float:
     """
-    Calculate profit for a given itinerary (one-way) and fare
+    Calculate annual expected profit for a given itinerary (one-way) and fare
+
+    Parameters
+    ----------
+    airline_route : pd.Series
+    city_pair_in : pd.Series
+    origin : pd.Series
+    destination : pd.Series
+    fleet_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    FuelCost_USDperGallon : float
+    demand_coefficients : dict[str, float]
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    new_itin_fare: float | None = None
+        New airline-specific itinerary fare to test
+
+    Returns
+    -------
+    annual_itin_profit
+        Annual expected profit for a given itinerary (one-way)
     """
     city_pair = city_pair_in.copy()  # copy explicitly to avoid SettingWithCopyWarning
     if new_itin_fare is not None:
@@ -1542,6 +1683,23 @@ def update_itinerary_times(
     aircraft_data: pd.DataFrame,
     airline_fleets: list[pd.DataFrame],
 ) -> list[pd.DataFrame]:
+    """
+    Update mean itinerary times for all itineraries for all airlines between years to account for aircraft being retired and replaced
+    airline_routes is updated in-place
+
+    Parameters
+    ----------
+    airlines : pd.DataFrame
+    airline_routes : list[pd.DataFrame]
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    airline_fleets : list[pd.DataFrame]
+
+    Returns
+    -------
+    airline_routes : list[pd.DataFrame]:
+    """
     for airline_id, _ in airlines.iterrows():
         for idx, itin in airline_routes[airline_id].iterrows():
             # remove itinerary if no aircraft assigned and warn because this should have been dealt with elsewhere
