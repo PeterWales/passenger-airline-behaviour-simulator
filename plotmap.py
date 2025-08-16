@@ -108,10 +108,6 @@ if __name__ == "__main__":
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
 
-    # # Australia
-    # long_range = [110, 157]
-    # lat_range = [-45, -5]
-
     # Europe
     long_range = [-20, 40]
     lat_range = [30, 75]

@@ -17,6 +17,20 @@ def set_base_values(
     income_data: pd.DataFrame,
     base_year: int,
 ) -> pd.DataFrame:
+    """
+    Populates country_data base year values of population and GDP from population_data and income_data
+
+    Parameters
+    ----------
+    country_data : pd.DataFrame
+    population_data : pd.DataFrame
+    income_data : pd.DataFrame
+    base_year : int
+
+    Returns
+    -------
+    country_data : pd.DataFrame
+    """
     country_populations = []
     country_incomes = []
     for _, country in country_data.iterrows():
@@ -265,7 +279,7 @@ def add_airports_to_cities(city_data: pd.DataFrame, airport_data: pd.DataFrame) 
     return city_data, city_lookup
 
 
-def calc_airport_capacity(airport):
+def calc_airport_capacity(airport: pd.Series) -> float:
     """
     Adjust airport capacity to account for variation in demand through a single day.
     The airport is considered to be running at 100% when a single 3-hr block is running at 100% capacity.
@@ -564,8 +578,28 @@ def annual_update(
     income_data: pd.DataFrame,
     airport_expansion_data: pd.DataFrame,
     year_entering: int,
-    run_parameters,
-):
+    run_parameters: dict,
+) -> pd.DataFrame:
+    """
+    Update city populations and incomes for the new calendar year
+    Expand airport capacity if required
+    Edits city_data dataframe in-place
+
+    Parameters
+    ----------
+    country_data: pd.DataFrame
+    city_data: pd.DataFrame
+    city_lookup: list
+    population_data: pd.DataFrame
+    income_data: pd.DataFrame
+    airport_expansion_data: pd.DataFrame
+    year_entering: int
+    run_parameters : dict
+
+    Returns
+    -------
+    city_data : pd.DataFrame
+    """
     for _, country in country_data.iterrows():
         country_pop = population_data[population_data["Number"] == country["Number"]]
         country_inc = income_data[income_data["Number"] == country["Number"]]

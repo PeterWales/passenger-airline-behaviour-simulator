@@ -30,13 +30,6 @@ GNI_THRESHOLDS = {
     "upper_middle": 4526,
     "high": 14005
 }  # World Bank GNI per capita thresholds for country income levels (USD)
-# AC_SIZE_EQUIVALENCE = {
-#     "size_0": [3,2,1],
-#     "size_1": [3,2,3],
-#     "size_2": [6,5,3],
-#     "size_4": [4,3,5],
-#     "size_5": [4,3,6],
-# }  # [number of size_a a/c to replace, number of larger a/c to add, size class of larger a/c]
 ROUTE_MAX_SINGLE_SZ = {
     "size_0": 3,
     "size_1": 3,
@@ -56,5 +49,5 @@ US_GALLONS_PER_L = 0.264172  # US gallons in one litre
 # --------------------
 # Calculated constants
 # --------------------
-FUEL_GALLONS_PER_KG = US_GALLONS_PER_L /FUEL_DENSITY_KG_LITRE  # 1kg of fuel in gallons ~= 0.33
-OP_HRS_PER_YEAR = (24-CURFEW_HOURS) * 365  # airport operational hours per year
+FUEL_GALLONS_PER_KG = US_GALLONS_PER_L / FUEL_DENSITY_KG_LITRE  # 1kg of fuel in gallons ~= 0.33
+OP_HRS_PER_YEAR = (24 - CURFEW_HOURS) * 365  # airport operational hours per year

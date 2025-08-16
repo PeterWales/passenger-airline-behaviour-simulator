@@ -4,7 +4,7 @@ import math
 
 def update_od_demand(
     city_pair: pd.Series,
-) -> float:
+) -> int:
     """
     Update the total route demand based on fare and annual static factors.
 
@@ -15,7 +15,7 @@ def update_od_demand(
     
     Returns
     -------
-    demand
+    demand : int
     """
     # TODO: add input for national taxes
     fare_factor = 1 + (
@@ -69,7 +69,7 @@ def calc_exp_utility(
     itin_time_hrs: float,
     flights_per_year: int,
     fuel_stop: int,
-):
+) -> float:
     """
     Calculate the e^utility of a flight segment.
 
