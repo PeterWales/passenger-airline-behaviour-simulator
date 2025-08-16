@@ -20,6 +20,7 @@ def initialise_routes(
 ) -> pd.DataFrame:
     """
     Initialise the routes between cities with demand and elasticity data.
+    Updates city_pair_data in-place
 
     Parameters
     ----------
@@ -185,7 +186,7 @@ def route_income_elasticity(
         destination_income_USDpercap: float,
     ) -> tuple[float, float]:
     """
-    Retrieve the appropriate income elasticity values to the origin and destination cities.
+    Retrieve the appropriate income elasticity values for the origin and destination cities.
 
     Parameters
     ----------
@@ -443,10 +444,35 @@ def test_fuel_stop(
     min_runway_m: float,
     aircraft_range: float,
     city_pair_data: pd.DataFrame,
-):
+) -> tuple[int, float]:
     """
     Test a city as a potential fuel stop for a route based on distance and runway length requirements.
     If the city is a suitable fuel stop and reduces itinerary distance, update the fuel_stop and min_distance variables.
+    If the city is not suitable or results in no improvement in itinerary distance, return the unchanged fuel_stop and min_distance variables.
+
+    Parameters
+    ----------
+    fuel_stop : int
+        ID of the best fuel stop option found so far
+    min_distance : float
+        Distance between the city with ID=fuel_stop and the midpoint of origin and destination
+    city : pd.Series
+        Series containing info on the city being tested as a fuel stop
+    city_id : int
+        ID of test city
+    midpoint : snv.LatLon
+        Midpoint of origin and destination cities
+    regions : list | None
+    origin : pd.Series
+    destination : pd.Series
+    min_runway_m : float
+    aircraft_range : float
+    city_pair_data : pd.DataFrame
+
+    Returns
+    -------
+    fuel_stop : int
+    min_distance : float
     """
     city_coords = snv.LatLon(
         city["Latitude"],
@@ -487,11 +513,21 @@ def annual_update(
     city_pair_data: pd.DataFrame,
     city_data: pd.DataFrame,
     population_elasticity: float
-):
+) -> pd.DataFrame:
     """"
     Update the non-price-dependent contribution to demand factor for all routes based on the city data and elasticities.
-
+    Updates city_pair_data in-place
     NOTE: When updating for a new year, the city_data DataFrame must be updated first.
+
+    Parameters
+    ----------
+    city_pair_data : pd.DataFrame
+    city_data : pd.DataFrame
+    population_elasticity : float
+
+    Returns
+    -------
+    city_pair_data : pd.DataFrame
     """
     for idx, route in city_pair_data.iterrows():
         origin_id = route["OriginCityID"]

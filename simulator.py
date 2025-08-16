@@ -31,11 +31,42 @@ def simulate_base_year(
     max_fare: float,
     iteration_limit: int,
     demand_coefficients: dict[str, float],
-    saf_mandate_data,
-    saf_pathway_data,
+    saf_mandate_data: pd.DataFrame,
+    saf_pathway_data: pd.DataFrame,
     run_parameters: dict,
     city_lookup: list[list[int]],
 ) -> tuple[list[pd.DataFrame], pd.DataFrame, float]:
+    """
+    Allow airlines to iteratively make adjustments to their base year schedules to reduce the effect of a poor initialisation condition on the simulation.
+    Stop when no route average fares change by more than FARE_CONVERGENCE_TOLERANCE across consecutive iterations, or iteration_limit reached.
+    Updates airline_routes and city_pair_data dataframes in-place, and also returns predicted total fuel usage for the year for pricing SAF for the following iteration.
+    
+    Parameters
+    ----------
+    year : int
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    airlines : pd.DataFrame
+    airline_fleets : list[pd.DataFrame]
+    airline_routes : list[pd.DataFrame]
+    aircraft_data : pd.DataFrame
+    CJFCost_USDperGallon : float
+    save_folder_path : str
+    cache_folder_path : str
+    max_fare : float
+    iteration_limit : int
+    demand_coefficients : dict[str, float]
+    saf_mandate_data : pd.DataFrame
+    saf_pathway_data : pd.DataFrame
+    run_parameters : dict
+    city_lookup : list[list[int]]
+
+    Returns
+    -------
+    airline_routes : list[pd.DataFrame]
+    city_pair_data : pd.DataFrame
+    total_fuel_kg : float
+    """
     print(f"    Simulating base year ({year})...")
     print("    Time: ", datetime.datetime.now(), "\n")
 
@@ -198,7 +229,7 @@ def run_simulation(
     city_data: pd.DataFrame,
     city_pair_data: pd.DataFrame,
     city_lookup: list[list[int]],
-    country_data,
+    country_data: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     demand_coefficients: dict[str, float],
     population_elasticity: float,
@@ -211,7 +242,37 @@ def run_simulation(
     saf_mandate_data: pd.DataFrame,
     saf_pathway_data: pd.DataFrame,
     run_parameters: dict,
-):
+) -> None:
+    """
+    Function to run the actual simulation.
+    Returns None as all outputs are saved to csv files.
+
+    Parameters
+    ----------
+    airlines : pd.DataFrame
+    airline_fleets : list[pd.DataFrame]
+    airline_routes : list[pd.DataFrame]
+    city_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
+    city_lookup : list[list[int]]
+    country_data : pd.DataFrame
+    aircraft_data : pd.DataFrame
+    demand_coefficients : dict[str, float]
+    population_elasticity : float
+    population_data : pd.DataFrame
+    income_data : pd.DataFrame
+    conv_fuel_data : pd.DataFrame
+    save_folder_path : str
+    cache_folder_path : str
+    airport_expansion_data : pd.DataFrame
+    saf_mandate_data : pd.DataFrame
+    saf_pathway_data : pd.DataFrame
+    run_parameters : dict
+
+    Returns
+    -------
+    None
+    """
     base_year = run_parameters["StartYear"]
     end_year = run_parameters["EndYear"]
 
@@ -432,6 +493,7 @@ def limit_to_region(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Adjust dataframes to limit the simulation to a certain region.
+    Updates airlines, city_pair_data, city_data and country_data dataframes in-place.
 
     Parameters
     ----------
@@ -446,6 +508,7 @@ def limit_to_region(
     airlines : pd.DataFrame
     city_pair_data : pd.DataFrame
     city_data : pd.DataFrame
+    country_data : pd.DataFrame
     """
     if regions is not None:
         # drop airlines that are not registered in the region
@@ -488,7 +551,7 @@ def update_fuel_and_sales(
 ) -> tuple[float, pd.DataFrame, list[pd.DataFrame]]:
     """
     Calculate the total fuel consumption for the simulation and update the "Fuel_Consumption_kg" column in the city_pair_data DataFrame.
-    Also updates the "Tickets_Sold" column in the airline_routes and city_pair_data DataFrames.
+    Also updates the "Tickets_Sold" column in the airline_routes and city_pair_data DataFrames in-place.
 
     Parameters
     ----------
@@ -496,7 +559,9 @@ def update_fuel_and_sales(
     airline_routes : list[pd.DataFrame]
     airline_fleets : list[pd.DataFrame]
     city_pair_data : pd.DataFrame
+    city_pair_data : pd.DataFrame
     aircraft_data : pd.DataFrame
+    OldFuelCost_USDperGallon : float
 
     Returns
     -------
@@ -504,6 +569,7 @@ def update_fuel_and_sales(
         Total fuel consumption in kg for the simulation.
     city_pair_data : pd.DataFrame
         Updated city_pair_data DataFrame with the "Fuel_Consumption_kg" column.
+    airline_routes : list[pd.DataFrame]
     """
     print("        Calculating fuel usage...")
     print("        Time: ", datetime.datetime.now(), "\n")
@@ -588,7 +654,7 @@ def fuel_price_with_saf(
     saf_pathway_data: pd.DataFrame,
     year: int,
     total_fuel_kg: float,
-):
+) -> float:
     """
     Calculate the fuel price including mandated SAF proportion.
     After satisfying the synthetic sub-mandate, the cheapest SAF pathways are used first.

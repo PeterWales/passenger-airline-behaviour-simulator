@@ -722,7 +722,13 @@ def reassign_ac_to_new_route(
     airline_fleets: pd.DataFrame,
     aircraft_data: pd.DataFrame,
     demand_coefficients: dict[str, float],
-):
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
     """
     Reassign an aircraft to a new route (or ground it) and make the necessary adjustments to all dataframes.
 
