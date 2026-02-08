@@ -1,0 +1,2 @@
+﻿RunNumber,RunID,DataInputDirectory,Regions,RouteProportion,CacheDirectory,CacheOption,RerunFareInit,StartYear,EndYear,BaseIterationLimit,MaxFare,AirlinesPerCountry,ShortestFlight_km,PopulationElasticity,ContinueExistingSim,IDToContinue,YearToContinue,LimitCapacity,CapacityGrowth,RunAirportExpansion,RunSAFMandate
+1,Sub_EU_US_test,data_EU_US,[13],0.1,cache_EU_US,load,y,2015,2050,3,40000,3,100,0.8,n,BSL,2025,y,0.05,y,y
